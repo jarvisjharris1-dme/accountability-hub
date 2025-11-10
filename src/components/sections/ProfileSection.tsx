@@ -50,7 +50,7 @@ export const ProfileSection: React.FC<ProfileSectionProps> = ({ user, onUpdate }
     try {
       // Prepare the update payload with proper field mapping
       const updatePayload: any = {
-        name: formData.name,
+        full_name: formData.name,  // Database column is 'full_name', not 'name'
         age: formData.age,
         location: formData.location,
         accountability_areas: formData.accountabilityAreas,
@@ -168,7 +168,7 @@ export const ProfileSection: React.FC<ProfileSectionProps> = ({ user, onUpdate }
                 value={formData.location}
                 onChange={(e) => setFormData(prev => ({ ...prev, location: e.target.value }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#d4a574] focus:border-transparent"
-                placeholder="Address"
+                placeholder="Location"
               />
               <div className="grid grid-cols-3 gap-3">
                 <input
