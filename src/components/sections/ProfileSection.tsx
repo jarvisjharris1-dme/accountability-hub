@@ -18,7 +18,6 @@ interface ProfileSectionProps {
 
 const areaLabels: Record<AccountabilityArea, string> = {
   sex: 'Sexual Integrity',
-
   relationship: 'Relationship Commitment',
   drugs: 'Drug Use',
   alcohol: 'Alcohol Use',
@@ -49,36 +48,53 @@ export const ProfileSection: React.FC<ProfileSectionProps> = ({ user, onUpdate }
     
     setIsSaving(true);
     try {
-      const { error } = await supabase
+      // Prepare the update payload with proper field mapping
+      const updatePayload: any = {
+        name: formData.name,
+        age: formData.age,
+        location: formData.location,
+        accountability_areas: formData.accountabilityAreas,
+      };
+
+      // Only include optional fields if they have values
+      if (formData.city) updatePayload.city = formData.city;
+      if (formData.state) updatePayload.state = formData.state;
+      if (formData.zipcode) updatePayload.zipcode = formData.zipcode;
+      if (formData.sex) updatePayload.sex = formData.sex;
+      if (formData.ethnicity) updatePayload.ethnicity = formData.ethnicity;
+      if (formData.familyStatus) updatePayload.family_status = formData.familyStatus;
+
+      console.log('Updating profile with payload:', updatePayload);
+
+      const { data, error } = await supabase
         .from('profiles')
-        .update({
-          name: formData.name,
-          age: formData.age,
-          location: formData.location,
-          city: formData.city,
-          state: formData.state,
-          zipcode: formData.zipcode,
-          sex: formData.sex,
-          ethnicity: formData.ethnicity,
-          family_status: formData.familyStatus,
-          accountability_areas: formData.accountabilityAreas,
-        })
-        .eq('id', authUser.id);
+        .update(updatePayload)
+        .eq('id', authUser.id)
+        .select();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase error details:', error);
+        throw error;
+      }
 
+      console.log('Update successful:', data);
       onUpdate(formData);
       setIsEditing(false);
       alert('Profile updated successfully!');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating profile:', error);
-      alert('Failed to update profile. Please try again.');
+      
+      // More detailed error message
+      const errorMessage = error?.message || 'Failed to update profile';
+      const errorDetails = error?.details || '';
+      const errorHint = error?.hint || '';
+      
+      console.error('Full error:', { errorMessage, errorDetails, errorHint });
+      alert(`Failed to update profile: ${errorMessage}${errorDetails ? '\n' + errorDetails : ''}${errorHint ? '\n' + errorHint : ''}`);
     } finally {
       setIsSaving(false);
     }
   };
-
-
 
   const handlePhotoUpdate = (url: string) => {
     setFormData(prev => ({ ...prev, avatar: url }));
@@ -93,7 +109,6 @@ export const ProfileSection: React.FC<ProfileSectionProps> = ({ user, onUpdate }
         : [...prev.accountabilityAreas, area]
     }));
   };
-
 
   return (
     <div className="space-y-6">
@@ -153,7 +168,7 @@ export const ProfileSection: React.FC<ProfileSectionProps> = ({ user, onUpdate }
                 value={formData.location}
                 onChange={(e) => setFormData(prev => ({ ...prev, location: e.target.value }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#d4a574] focus:border-transparent"
-                placeholder="Location"
+                placeholder="Address"
               />
               <div className="grid grid-cols-3 gap-3">
                 <input
@@ -220,7 +235,6 @@ export const ProfileSection: React.FC<ProfileSectionProps> = ({ user, onUpdate }
           )}
         </div>
 
-
         <div>
           <h3 className="text-lg font-semibold text-[#1a2332] mb-4">Accountability Areas</h3>
           <div className="grid grid-cols-2 gap-3">
@@ -249,7 +263,6 @@ export const ProfileSection: React.FC<ProfileSectionProps> = ({ user, onUpdate }
           <TwoFactorSettings />
         </div>
 
-
         <div className="mt-6">
           <PhoneVerification
             userId={authUser?.id || ''}
@@ -268,10 +281,6 @@ export const ProfileSection: React.FC<ProfileSectionProps> = ({ user, onUpdate }
         <div className="mt-6">
           <SessionManagement />
         </div>
-
-
-
-
 
         <div className="mt-6 pt-6 border-t">
           <button
