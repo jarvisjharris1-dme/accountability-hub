@@ -36,6 +36,13 @@ export default function Login() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50 p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
+          <div className="flex justify-center mb-6">
+            <img 
+              src="/accountablelogo2_updated.jpg" 
+              alt="Accountable Logo" 
+              className="h-20 w-auto object-contain"
+            />
+          </div>
           <CardTitle className="text-2xl font-bold text-center">Welcome back</CardTitle>
           <CardDescription className="text-center">
             Enter your credentials to access your account
@@ -49,7 +56,6 @@ export default function Login() {
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}
-
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <div className="relative">
@@ -65,7 +71,6 @@ export default function Login() {
                 />
               </div>
             </div>
-
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="password">Password</Label>
@@ -86,7 +91,6 @@ export default function Login() {
                 />
               </div>
             </div>
-
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? (
                 <>
