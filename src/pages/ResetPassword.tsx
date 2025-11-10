@@ -152,6 +152,13 @@ export default function ResetPassword() {
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
+            <div className="flex justify-center mb-6">
+              <img 
+                src="/accountablelogo2_updated.jpg" 
+                alt="Accountable Logo" 
+                className="h-20 w-auto object-contain"
+              />
+            </div>
             <div className="flex justify-center mb-4">
               <div className="rounded-full bg-green-100 p-3">
                 <CheckCircle2 className="w-16 h-16 text-green-600" />
@@ -182,11 +189,11 @@ export default function ResetPassword() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-6">
-          <div className="flex justify-center">
+          <div className="flex justify-center mb-6">
             <img 
-              src="https://d64gsuwffb70l.cloudfront.net/6906b08a650ee0590aaf4bb4_1762183406403_6827ce42.png" 
-              alt="Accountable" 
-              className="h-40 w-auto"
+              src="/accountablelogo2_updated.jpg" 
+              alt="Accountable Logo" 
+              className="h-20 w-auto object-contain"
             />
           </div>
           
