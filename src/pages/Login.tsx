@@ -38,7 +38,7 @@ export default function Login() {
         <CardHeader className="space-y-1">
           <div className="flex justify-center mb-6">
             <img 
-              src="/accountablelogo2_updated.jpg" 
+              src="/accountablelogo2_updated.png" 
               alt="Accountable Logo" 
               className="h-20 w-auto object-contain"
             />
