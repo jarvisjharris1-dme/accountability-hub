@@ -23,29 +23,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
     });
 
+    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      console.log('Auth state change:', _event);
       setSession(session);
       setUser(session?.user ?? null);
       
+      // Create profile if user signs in and doesn't have one
       if (session?.user && _event === 'SIGNED_IN') {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('id', session.user.id)
-          .single();
-        
-        if (!profile) {
-          await supabase.from('profiles').insert({
-            id: session.user.id,
-            email: session.user.email,
-            full_name: session.user.user_metadata?.full_name || ''
-          });
+        try {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('id', session.user.id)
+            .single();
+          
+          if (!profile) {
+            await supabase.from('profiles').insert({
+              id: session.user.id,
+              email: session.user.email,
+              full_name: session.user.user_metadata?.full_name || ''
+            });
+          }
+        } catch (error) {
+          console.error('Error checking/creating profile:', error);
         }
       }
     });
@@ -56,9 +64,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signUp = async (email: string, password: string, fullName: string) => {
     try {
       // Log signup attempt
-      await supabase.functions.invoke('log-signup-event', {
-        body: { event_type: 'attempt', email }
-      });
+      try {
+        await supabase.functions.invoke('log-signup-event', {
+          body: { event_type: 'attempt', email }
+        });
+      } catch (logError) {
+        console.warn('Failed to log signup attempt:', logError);
+      }
 
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -80,35 +92,46 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         if (profileError) {
           // Log profile creation failure
-          await supabase.functions.invoke('log-signup-event', {
-            body: { 
-              event_type: 'profile_failed', 
-              user_id: data.user.id,
-              email,
-              error_message: profileError.message 
-            }
-          });
+          try {
+            await supabase.functions.invoke('log-signup-event', {
+              body: { 
+                event_type: 'profile_failed', 
+                user_id: data.user.id,
+                email,
+                error_message: profileError.message 
+              }
+            });
+          } catch (logError) {
+            console.warn('Failed to log profile error:', logError);
+          }
           throw new Error('Database error saving new user');
         }
 
         // Log successful signup
-        await supabase.functions.invoke('log-signup-event', {
-          body: { event_type: 'success', user_id: data.user.id, email }
-        });
+        try {
+          await supabase.functions.invoke('log-signup-event', {
+            body: { event_type: 'success', user_id: data.user.id, email }
+          });
+        } catch (logError) {
+          console.warn('Failed to log signup success:', logError);
+        }
       }
     } catch (err: any) {
       // Log error
-      await supabase.functions.invoke('log-signup-event', {
-        body: { 
-          event_type: 'error', 
-          email,
-          error_message: err.message 
-        }
-      });
+      try {
+        await supabase.functions.invoke('log-signup-event', {
+          body: { 
+            event_type: 'error', 
+            email,
+            error_message: err.message 
+          }
+        });
+      } catch (logError) {
+        console.warn('Failed to log signup error:', logError);
+      }
       throw err;
     }
   };
-
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -143,7 +166,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, signUp, signIn, signInWithProvider, signOut, resetPassword, updatePassword, resendVerificationEmail }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      session, 
+      loading, 
+      signUp, 
+      signIn, 
+      signInWithProvider, 
+      signOut, 
+      resetPassword, 
+      updatePassword, 
+      resendVerificationEmail 
+    }}>
       {children}
     </AuthContext.Provider>
   );
@@ -154,3 +188,4 @@ export const useAuth = () => {
   if (!context) throw new Error('useAuth must be used within AuthProvider');
   return context;
 };
+
