@@ -42,35 +42,52 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Create profile if user signs in and doesn't have one
       if (session?.user && _event === 'SIGNED_IN') {
         console.log('=== SIGNED_IN - Checking profile ===');
-        try {
-          const { data: profile, error: fetchError } = await supabase
-            .from('profiles')
-            .select('id')
-            .eq('id', session.user.id)
-            .single();
-          
-          console.log('Profile fetch result:', { profile, error: fetchError });
-          
-          if (!profile && !fetchError) {
-            console.log('No profile found, creating one...');
-            const { error: insertError } = await supabase.from('profiles').insert({
-              id: session.user.id,
-              email: session.user.email,
-              full_name: session.user.user_metadata?.full_name || ''
-            });
+        
+        // Don't block the auth flow - check profile in background
+        (async () => {
+          try {
+            // Add timeout to prevent hanging
+            const timeoutPromise = new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Profile check timeout')), 5000)
+            );
             
-            if (insertError) {
-              console.error('Profile creation error:', insertError);
+            const fetchPromise = supabase
+              .from('profiles')
+              .select('id')
+              .eq('id', session.user.id)
+              .single();
+            
+            const { data: profile, error: fetchError } = await Promise.race([
+              fetchPromise,
+              timeoutPromise
+            ]) as any;
+            
+            console.log('Profile fetch result:', { profile, error: fetchError });
+            
+            // Only create if profile doesn't exist (not on other errors)
+            if (!profile && fetchError?.code === 'PGRST116') {
+              console.log('No profile found (PGRST116), creating one...');
+              const { error: insertError } = await supabase.from('profiles').insert({
+                id: session.user.id,
+                email: session.user.email,
+                full_name: session.user.user_metadata?.full_name || ''
+              });
+              
+              if (insertError) {
+                console.error('Profile creation error:', insertError);
+              } else {
+                console.log('✅ Profile created successfully');
+              }
+            } else if (profile) {
+              console.log('✅ Profile already exists');
             } else {
-              console.log('✅ Profile created successfully');
+              console.warn('Profile check returned error:', fetchError);
             }
-          } else {
-            console.log('✅ Profile already exists');
+          } catch (error) {
+            console.error('❌ Error in profile check/creation:', error);
           }
-        } catch (error) {
-          console.error('❌ Error in profile check/creation:', error);
-        }
-        console.log('=== SIGNED_IN processing complete ===');
+          console.log('=== SIGNED_IN processing complete ===');
+        })();
       }
     });
 
@@ -204,4 +221,3 @@ export const useAuth = () => {
   if (!context) throw new Error('useAuth must be used within AuthProvider');
   return context;
 };
-
