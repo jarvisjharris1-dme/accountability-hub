@@ -176,31 +176,37 @@ export const ProfileSection: React.FC<ProfileSectionProps> = ({ user, onUpdate }
                 placeholder="Name"
               />
               <div className="grid grid-cols-2 gap-3">
-                <input
-                  type="number"
-                  value={formData.age}
-                  onChange={(e) => setFormData(prev => ({ ...prev, age: parseInt(e.target.value) || 0 }))}
-                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#d4a574] focus:border-transparent"
-                  placeholder="Age"
-                />
-                <select
-                  value={formData.sex || ''}
-                  onChange={(e) => setFormData(prev => ({ ...prev, sex: e.target.value }))}
-                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#d4a574] focus:border-transparent"
-                >
-                  <option value="">Select Sex</option>
-                  <option value="male">Male</option>
-                  <option value="female">Female</option>
-                  <option value="other">Other</option>
-                  <option value="prefer_not_to_say">Prefer not to say</option>
-                </select>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Age</label>
+                  <input
+                    type="number"
+                    value={formData.age}
+                    onChange={(e) => setFormData(prev => ({ ...prev, age: parseInt(e.target.value) || 0 }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#d4a574] focus:border-transparent"
+                    placeholder="Age"
+                    min="1"
+                    max="120"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Sex</label>
+                  <select
+                    value={formData.sex || ''}
+                    onChange={(e) => setFormData(prev => ({ ...prev, sex: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#d4a574] focus:border-transparent"
+                  >
+                    <option value="">Select Sex</option>
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                  </select>
+                </div>
               </div>
               <input
                 type="text"
                 value={formData.location}
                 onChange={(e) => setFormData(prev => ({ ...prev, location: e.target.value }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#d4a574] focus:border-transparent"
-                placeholder="Location"
+                placeholder="Address"
               />
               <div className="grid grid-cols-3 gap-3">
                 <input
@@ -241,18 +247,22 @@ export const ProfileSection: React.FC<ProfileSectionProps> = ({ user, onUpdate }
                 <option value="other">Other</option>
                 <option value="prefer_not_to_say">Prefer not to say</option>
               </select>
-              <input
-                type="text"
+              <select
                 value={formData.familyStatus}
                 onChange={(e) => setFormData(prev => ({ ...prev, familyStatus: e.target.value }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#d4a574] focus:border-transparent"
-                placeholder="Family Status"
-              />
+              >
+                <option value="">Select Family Status</option>
+                <option value="Single">Single</option>
+                <option value="Married">Married</option>
+                <option value="Divorced">Divorced</option>
+                <option value="Widow">Widow</option>
+              </select>
             </div>
           ) : (
             <div>
               <h3 className="text-2xl font-bold text-[#1a2332]">{user.name}</h3>
-              <p className="text-gray-600">{user.age} years old{user.sex && ` • ${user.sex.charAt(0).toUpperCase() + user.sex.slice(1).replace('_', ' ')}`}</p>
+              <p className="text-gray-600">{user.age} years old{user.sex && ` • ${user.sex.charAt(0).toUpperCase() + user.sex.slice(1)}`}</p>
               <p className="text-gray-600">{user.location}</p>
               {(user.city || user.state || user.zipcode) && (
                 <p className="text-gray-600">
