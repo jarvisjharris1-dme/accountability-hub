@@ -33,28 +33,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       console.log('Auth state change:', _event);
+      console.log('Session:', session ? 'Present' : 'None');
+      console.log('User ID:', session?.user?.id);
+      
       setSession(session);
       setUser(session?.user ?? null);
       
       // Create profile if user signs in and doesn't have one
       if (session?.user && _event === 'SIGNED_IN') {
+        console.log('=== SIGNED_IN - Checking profile ===');
         try {
-          const { data: profile } = await supabase
+          const { data: profile, error: fetchError } = await supabase
             .from('profiles')
             .select('id')
             .eq('id', session.user.id)
             .single();
           
-          if (!profile) {
-            await supabase.from('profiles').insert({
+          console.log('Profile fetch result:', { profile, error: fetchError });
+          
+          if (!profile && !fetchError) {
+            console.log('No profile found, creating one...');
+            const { error: insertError } = await supabase.from('profiles').insert({
               id: session.user.id,
               email: session.user.email,
               full_name: session.user.user_metadata?.full_name || ''
             });
+            
+            if (insertError) {
+              console.error('Profile creation error:', insertError);
+            } else {
+              console.log('✅ Profile created successfully');
+            }
+          } else {
+            console.log('✅ Profile already exists');
           }
         } catch (error) {
-          console.error('Error checking/creating profile:', error);
+          console.error('❌ Error in profile check/creation:', error);
         }
+        console.log('=== SIGNED_IN processing complete ===');
       }
     });
 
@@ -188,3 +204,4 @@ export const useAuth = () => {
   if (!context) throw new Error('useAuth must be used within AuthProvider');
   return context;
 };
+
