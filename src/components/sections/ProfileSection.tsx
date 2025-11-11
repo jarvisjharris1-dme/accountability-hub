@@ -44,16 +44,25 @@ export const ProfileSection: React.FC<ProfileSectionProps> = ({ user, onUpdate }
   };
 
   const handleSave = async () => {
-    if (!authUser) return;
+    if (!authUser) {
+      alert('No authenticated user found. Please log in again.');
+      return;
+    }
+    
+    console.log('=== STARTING PROFILE SAVE ===');
+    console.log('Auth User ID:', authUser.id);
+    console.log('Form Data:', formData);
     
     setIsSaving(true);
+    
     try {
       // Prepare the update payload with proper field mapping
       const updatePayload: any = {
-        full_name: formData.name,  // Database column is 'full_name', not 'name'
+        full_name: formData.name,
         age: formData.age,
         location: formData.location,
         accountability_areas: formData.accountabilityAreas,
+        updated_at: new Date().toISOString(),
       };
 
       // Only include optional fields if they have values
@@ -64,7 +73,7 @@ export const ProfileSection: React.FC<ProfileSectionProps> = ({ user, onUpdate }
       if (formData.ethnicity) updatePayload.ethnicity = formData.ethnicity;
       if (formData.familyStatus) updatePayload.family_status = formData.familyStatus;
 
-      console.log('Updating profile with payload:', updatePayload);
+      console.log('Update payload:', JSON.stringify(updatePayload, null, 2));
 
       const { data, error } = await supabase
         .from('profiles')
@@ -72,26 +81,49 @@ export const ProfileSection: React.FC<ProfileSectionProps> = ({ user, onUpdate }
         .eq('id', authUser.id)
         .select();
 
+      console.log('Supabase response - Data:', data);
+      console.log('Supabase response - Error:', error);
+
       if (error) {
-        console.error('Supabase error details:', error);
+        console.error('❌ SUPABASE ERROR:', error);
         throw error;
       }
 
-      console.log('Update successful:', data);
+      if (!data || data.length === 0) {
+        throw new Error('No data returned from update. Profile may not exist.');
+      }
+
+      console.log('✅ UPDATE SUCCESSFUL');
       onUpdate(formData);
       setIsEditing(false);
       alert('Profile updated successfully!');
+      
     } catch (error: any) {
-      console.error('Error updating profile:', error);
+      console.error('❌ CATCH BLOCK ERROR:', error);
       
       // More detailed error message
       const errorMessage = error?.message || 'Failed to update profile';
       const errorDetails = error?.details || '';
       const errorHint = error?.hint || '';
+      const errorCode = error?.code || '';
       
-      console.error('Full error:', { errorMessage, errorDetails, errorHint });
-      alert(`Failed to update profile: ${errorMessage}${errorDetails ? '\n' + errorDetails : ''}${errorHint ? '\n' + errorHint : ''}`);
+      console.error('Full error object:', {
+        message: errorMessage,
+        details: errorDetails,
+        hint: errorHint,
+        code: errorCode,
+        fullError: error
+      });
+      
+      let displayMessage = `Failed to update profile:\n${errorMessage}`;
+      if (errorDetails) displayMessage += `\n\nDetails: ${errorDetails}`;
+      if (errorHint) displayMessage += `\n\nHint: ${errorHint}`;
+      if (errorCode) displayMessage += `\n\nError Code: ${errorCode}`;
+      
+      alert(displayMessage);
+      
     } finally {
+      console.log('=== FINISHING PROFILE SAVE ===');
       setIsSaving(false);
     }
   };
