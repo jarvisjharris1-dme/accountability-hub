@@ -18,16 +18,21 @@ export default function Login() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('=== LOGIN FORM SUBMITTED ===');
     setError('');
     setLoading(true);
 
     try {
+      console.log('Calling signIn...');
       await signIn(email, password);
+      console.log('✅ signIn successful, navigating to home...');
       navigate('/');
+      console.log('✅ Navigation called');
     } catch (err: any) {
-      console.error('Login error:', err);
+      console.error('❌ Login error:', err);
       setError(err.message || 'Failed to sign in. Please check your credentials.');
     } finally {
+      console.log('=== LOGIN FORM COMPLETE ===');
       setLoading(false);
     }
   };
