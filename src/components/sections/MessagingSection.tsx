@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ConversationList } from '../messaging/ConversationList';
 import { ChatWindow } from '../messaging/ChatWindow';
 import { MessageSearchBar } from '../messaging/MessageSearchBar';
+import { supabase } from '@/lib/supabase';
 
 export function MessagingSection() {
   const [selectedConversation, setSelectedConversation] = useState<{
@@ -12,6 +13,43 @@ export function MessagingSection() {
   } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [highlightMessageId, setHighlightMessageId] = useState<string>();
+
+  // Check for auto-select member on mount
+  useEffect(() => {
+    const autoSelectMemberId = sessionStorage.getItem('autoSelectMemberId');
+    
+    if (autoSelectMemberId) {
+      // Fetch member details
+      const fetchMemberDetails = async () => {
+        try {
+          const { data: profile, error } = await supabase
+            .from('profiles')
+            .select('id, full_name, avatar')
+            .eq('id', autoSelectMemberId)
+            .single();
+
+          if (error) throw error;
+
+          if (profile) {
+            // Auto-select this conversation
+            setSelectedConversation({
+              id: profile.id,
+              name: profile.full_name || 'Unknown User',
+              avatar: profile.avatar || undefined,
+              isGroup: false
+            });
+          }
+        } catch (error) {
+          console.error('Error fetching member details:', error);
+        } finally {
+          // Clear the stored ID so it doesn't persist
+          sessionStorage.removeItem('autoSelectMemberId');
+        }
+      };
+
+      fetchMemberDetails();
+    }
+  }, []);
 
   const handleSelectConversation = (id: string, name: string, avatar?: string, isGroup = false) => {
     setSelectedConversation({ id, name, avatar, isGroup });
