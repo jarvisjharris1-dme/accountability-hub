@@ -9,9 +9,10 @@ import { VerifiedOnlyFeature } from '@/components/VerifiedOnlyFeature';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import AppLayout from '@/components/AppLayout';
+import { AppProvider } from '@/contexts/AppContext';
 
-
-export default function Goals() {
+function GoalsContent() {
   const { user } = useAuth();
   const [goals, setGoals] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -59,7 +60,6 @@ export default function Goals() {
     setDetailDialogOpen(true);
   };
 
-
   return (
     <div className="container mx-auto p-4 pb-20 max-w-6xl">
       <CelebrationAnimation show={showCelebration} onComplete={() => setShowCelebration(false)} />
@@ -76,7 +76,6 @@ export default function Goals() {
           </Button>
         </VerifiedOnlyFeature>
       </div>
-
 
       <div className="flex gap-4 mb-6">
         <Select value={filterStatus} onValueChange={setFilterStatus}>
@@ -124,6 +123,7 @@ export default function Goals() {
           ))}
         </div>
       )}
+
       <CreateGoalDialog
         open={createDialogOpen}
         onOpenChange={setCreateDialogOpen}
@@ -137,5 +137,15 @@ export default function Goals() {
         onUpdate={fetchGoals}
       />
     </div>
+  );
+}
+
+export default function Goals() {
+  return (
+    <AppProvider>
+      <AppLayout>
+        <GoalsContent />
+      </AppLayout>
+    </AppProvider>
   );
 }
