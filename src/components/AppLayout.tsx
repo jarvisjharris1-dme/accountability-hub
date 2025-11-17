@@ -28,6 +28,7 @@ const AppLayout: React.FC = () => {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [circleSize, setCircleSize] = useState(0);
+  const [journalCount, setJournalCount] = useState(0);
   const { user: authUser } = useAuth();
 
   const handleTabChange = (tab: string) => {
@@ -50,6 +51,7 @@ const AppLayout: React.FC = () => {
     loadUserProfile();
     updateCircleActivity();
     loadCircleSize();
+    loadJournalCount();
   }, [authUser]);
 
   const updateCircleActivity = async () => {
@@ -71,6 +73,22 @@ const AppLayout: React.FC = () => {
       setCircleSize(count || 0);
     } catch (error) {
       console.error('Error loading circle size:', error);
+    }
+  };
+
+  const loadJournalCount = async () => {
+    if (!authUser) return;
+    try {
+      const { count, error } = await supabase
+        .from('journal_entries')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', authUser.id);
+      
+      if (error) throw error;
+      setJournalCount(count || 0);
+    } catch (error) {
+      console.error('Error loading journal count:', error);
+      setJournalCount(0);
     }
   };
 
@@ -142,7 +160,7 @@ const AppLayout: React.FC = () => {
             <DashboardHero user={user} />
             <DashboardStats 
               streakDays={user.streakDays} 
-              journalEntries={15} 
+              journalEntries={journalCount} 
               circleSize={circleSize} 
             />
             <div className="mb-8">
@@ -217,3 +235,4 @@ const AppLayout: React.FC = () => {
 };
 
 export default AppLayout;
+
