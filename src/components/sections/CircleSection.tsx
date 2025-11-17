@@ -17,7 +17,7 @@ interface CircleMember {
 interface Invitation {
   id: string;
   sender_id: string;
-  recipient_email: string;
+  invitee_email: string;
   message: string;
   created_at: string;
   sender_name: string;
@@ -47,7 +47,7 @@ export const CircleSection: React.FC = () => {
           member_id,
           last_active,
           profiles!circle_members_member_id_fkey (
-            name,
+            full_name,
             avatar,
             streak_days
           )
@@ -58,7 +58,7 @@ export const CircleSection: React.FC = () => {
 
       const formattedMembers = data?.map((item: any) => ({
         id: item.member_id,
-        name: item.profiles?.name || 'Anonymous',
+        name: item.profiles?.full_name || 'Anonymous',
         avatar: item.profiles?.avatar || '',
         lastActive: new Date(item.last_active).toLocaleDateString(),
         status: isRecent(item.last_active) ? 'active' : 'away',
@@ -80,12 +80,12 @@ export const CircleSection: React.FC = () => {
         .select(`
           id,
           sender_id,
-          recipient_email,
+          invitee_email,
           message,
           created_at,
-          profiles!circle_invitations_sender_id_fkey (name)
+          profiles!circle_invitations_sender_id_fkey (full_name)
         `)
-        .eq('recipient_email', user?.email)
+        .eq('invitee_email', user?.email)
         .eq('status', 'pending');
 
       if (error) throw error;
@@ -93,10 +93,10 @@ export const CircleSection: React.FC = () => {
       const formatted = data?.map((inv: any) => ({
         id: inv.id,
         sender_id: inv.sender_id,
-        recipient_email: inv.recipient_email,
+        invitee_email: inv.invitee_email,
         message: inv.message,
         created_at: inv.created_at,
-        sender_name: inv.profiles?.name || 'Someone'
+        sender_name: inv.profiles?.full_name || 'Someone'
       })) || [];
 
       setPendingInvites(formatted);
@@ -121,7 +121,7 @@ export const CircleSection: React.FC = () => {
         .from('circle_invitations')
         .insert({
           sender_id: user?.id,
-          recipient_email: inviteEmail.trim(),
+          invitee_email: inviteEmail.trim(),
           message: inviteMessage.trim() || 'Join my accountability circle!'
         });
 
