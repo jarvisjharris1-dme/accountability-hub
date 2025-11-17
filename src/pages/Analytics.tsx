@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import AppLayout from '@/components/AppLayout';
+import { AppProvider } from '@/contexts/AppContext';
 import { JournalTrendsChart } from '@/components/analytics/JournalTrendsChart';
 import { CircleActivityHeatmap } from '@/components/analytics/CircleActivityHeatmap';
 import { WorkshopProgressChart } from '@/components/analytics/WorkshopProgressChart';
@@ -10,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TrendingUp, Users, BookOpen, Target } from 'lucide-react';
 
-export default function Analytics() {
+function AnalyticsContent() {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     totalEntries: 0,
@@ -21,7 +23,6 @@ export default function Analytics() {
     completedGoals: 0,
     goalCompletionRate: 0
   });
-
 
   // Mock data for charts
   const journalTrendsData = [
@@ -88,7 +89,10 @@ export default function Analytics() {
         totalEntries: entriesRes.count || 0,
         currentStreak: calculateStreak(streaksRes.data || []),
         totalWorkshops: workshopsRes.count || 0,
-        circleActivity: 0
+        circleActivity: 0,
+        totalGoals: 0,
+        completedGoals: 0,
+        goalCompletionRate: 0
       });
     } catch (error) {
       console.error('Error loading analytics:', error);
@@ -187,5 +191,15 @@ export default function Analytics() {
         </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+export default function Analytics() {
+  return (
+    <AppProvider>
+      <AppLayout>
+        <AnalyticsContent />
+      </AppLayout>
+    </AppProvider>
   );
 }
