@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from 'react';
 import { Message, Group, GroupMember } from '@/types';
 import { MessageBubble } from './MessageBubble';
@@ -125,18 +126,26 @@ export function ChatWindow({ recipientId, recipientName, recipientAvatar, groupI
     e.preventDefault();
     if (!newMessage.trim() || !user) return;
 
-    // Insert message without mentions column (it doesn't exist in your schema)
-    const { error } = await supabase.from('messages').insert({
+    // Build message data with ALL required fields
+    const messageData: any = {
       sender_id: user.id,
-      recipient_id: groupId ? null : recipientId,
-      group_id: groupId || null,
       content: newMessage.trim(),
-      reply_to_message_id: replyingTo?.id || null,
-      topic: 'chat', // Required field
-      extension: 'text', // Required field
-      read: false,
-      message_type: 'text'
-    });
+      topic: 'chat',        // REQUIRED - no default
+      extension: 'text',    // REQUIRED - no default
+    };
+
+    // Add optional fields
+    if (recipientId) {
+      messageData.recipient_id = recipientId;
+    }
+    if (groupId) {
+      messageData.group_id = groupId;
+    }
+    if (replyingTo?.id) {
+      messageData.reply_to_message_id = replyingTo.id;
+    }
+
+    const { error } = await supabase.from('messages').insert(messageData);
 
     if (!error) {
       setNewMessage('');
@@ -158,95 +167,4 @@ export function ChatWindow({ recipientId, recipientName, recipientAvatar, groupI
         <GroupChatHeader
           group={group}
           members={members}
-          onSettingsClick={() => setShowSettings(true)}
-          onMediaClick={() => setShowMediaGallery(true)}
-          onVoiceCallClick={startVoiceCall}
-        />
-      ) : (
-        <div className="p-4 border-b bg-white flex justify-between items-center">
-          <div>
-            <h3 className="font-semibold">{recipientName}</h3>
-            {isTyping && <p className="text-xs text-gray-500">typing...</p>}
-          </div>
-          <Button size="icon" variant="ghost" onClick={startVoiceCall}>
-            <Phone className="w-4 h-4" />
-          </Button>
-        </div>
-      )}
-      
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.map((msg) => (
-          <MessageBubble 
-            key={msg.id}
-            message={msg} 
-            isOwn={msg.sender_id === user?.id}
-            searchQuery={searchQuery}
-            onAddReaction={() => {}}
-            onRemoveReaction={() => {}}
-            onReply={setReplyingTo}
-            onNavigateToReply={() => {}}
-            onPin={() => {}}
-            onUnpin={() => {}}
-            onEdit={() => {}}
-            onDelete={() => {}}
-          />
-        ))}
-        <div ref={messagesEndRef} />
-      </div>
-
-      {isRecording ? (
-        <VoiceRecorder 
-          onSend={async () => {}}
-          onCancel={() => setIsRecording(false)}
-        />
-      ) : (
-        <form onSubmit={sendMessage} className="p-4 border-t bg-white relative">
-          {replyingTo && (
-            <ReplyPreview 
-              message={replyingTo} 
-              onCancel={() => setReplyingTo(null)} 
-            />
-          )}
-          {showMentions && groupId && (
-            <MentionAutocomplete
-              members={members}
-              query={mentionQuery}
-              onSelect={handleMentionSelect}
-              onClose={() => setShowMentions(false)}
-            />
-          )}
-          <div className="flex gap-2">
-            <Input
-              ref={inputRef}
-              value={newMessage}
-              onChange={handleInputChange}
-              placeholder={groupId ? "Type a message... (use @ to mention)" : "Type a message..."}
-              className="flex-1"
-            />
-            <Button type="button" size="icon" variant="outline" onClick={() => setIsRecording(true)}>
-              <Mic className="w-4 h-4" />
-            </Button>
-            <Button type="submit" size="icon">
-              <Send className="w-4 h-4" />
-            </Button>
-          </div>
-        </form>
-      )}
-
-      {showSettings && groupId && (
-        <GroupSettingsDialog
-          group={group!}
-          onClose={() => setShowSettings(false)}
-          onUpdate={loadGroupData}
-        />
-      )}
-
-      {showMediaGallery && groupId && (
-        <MediaGallery
-          groupId={groupId}
-          onClose={() => setShowMediaGallery(false)}
-        />
-      )}
-    </div>
-  );
-}
+          onSettingsClick=
