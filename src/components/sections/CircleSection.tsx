@@ -122,6 +122,7 @@ export const CircleSection: React.FC = () => {
         .insert({
           inviter_id: user?.id,
           invitee_email: inviteEmail.trim(),
+          recipient_email: inviteEmail.trim(), // Same as invitee_email
           message: inviteMessage.trim() || 'Join my accountability circle!',
           status: 'pending'
         });
