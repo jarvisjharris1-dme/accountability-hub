@@ -89,7 +89,7 @@ const AppLayout: React.FC = () => {
       if (data) {
         setUser({
           id: data.id,
-          name: data.name || 'New User',
+          name: data.full_name || 'New User',
           age: data.age || 0,
           location: data.location || '',
           city: data.city || '',
@@ -101,7 +101,9 @@ const AppLayout: React.FC = () => {
           accountabilityAreas: (data.accountability_areas || []) as AccountabilityArea[],
           avatar: data.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + authUser.id,
           streakDays: data.streak_days || 0,
-          joinedDate: data.joined_date || new Date().toISOString()
+          joinedDate: data.joined_date || new Date().toISOString(),
+          phone_number: data.phone_number || '',
+          phone_verified: data.phone_verified || false
         });
       }
     } catch (error) {
