@@ -16,7 +16,7 @@ interface CircleMember {
 
 interface Invitation {
   id: string;
-  sender_id: string;
+  inviter_id: string;
   invitee_email: string;
   message: string;
   created_at: string;
@@ -79,11 +79,11 @@ export const CircleSection: React.FC = () => {
         .from('circle_invitations')
         .select(`
           id,
-          sender_id,
+          inviter_id,
           invitee_email,
           message,
           created_at,
-          profiles!circle_invitations_sender_id_fkey (full_name)
+          profiles!circle_invitations_inviter_id_fkey (full_name)
         `)
         .eq('invitee_email', user?.email)
         .eq('status', 'pending');
@@ -92,7 +92,7 @@ export const CircleSection: React.FC = () => {
 
       const formatted = data?.map((inv: any) => ({
         id: inv.id,
-        sender_id: inv.sender_id,
+        inviter_id: inv.inviter_id,
         invitee_email: inv.invitee_email,
         message: inv.message,
         created_at: inv.created_at,
@@ -120,55 +120,42 @@ export const CircleSection: React.FC = () => {
       const { error } = await supabase
         .from('circle_invitations')
         .insert({
-          sender_id: user?.id,
+          inviter_id: user?.id,
           invitee_email: inviteEmail.trim(),
-          message: inviteMessage.trim() || 'Join my accountability circle!'
+          message: inviteMessage.trim() || 'Join my accountability circle!',
+          status: 'pending'
         });
 
       if (error) throw error;
-
-      // Send push notification to recipient if they have an account
-      const { data: recipientProfile } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('id', (await supabase.auth.admin.getUserByEmail(inviteEmail)).data.user?.id)
-        .single();
-
-      if (recipientProfile) {
-        await supabase.functions.invoke('send-push-notification', {
-          body: {
-            userId: recipientProfile.id,
-            title: 'Circle Invitation',
-            body: `${user?.email} invited you to their accountability circle`,
-            data: { type: 'circle_invitation', url: '/circle' }
-          }
-        });
-      }
 
       alert(`Invitation sent to ${inviteEmail}`);
       setInviteEmail('');
       setInviteMessage('');
     } catch (error: any) {
+      console.error('Error sending invitation:', error);
       alert('Error sending invitation: ' + error.message);
     }
   };
 
 
-  const handleAcceptInvite = async (invitationId: string, senderId: string) => {
+  const handleAcceptInvite = async (invitationId: string, inviterId: string) => {
     try {
       await supabase.from('circle_invitations').update({ 
         status: 'accepted',
-        recipient_id: user?.id 
+        invitee_id: user?.id,
+        responded_at: new Date().toISOString()
       }).eq('id', invitationId);
 
       await supabase.from('circle_members').insert([
-        { user_id: senderId, member_id: user?.id },
-        { user_id: user?.id, member_id: senderId }
+        { user_id: inviterId, member_id: user?.id },
+        { user_id: user?.id, member_id: inviterId }
       ]);
 
       loadCircleMembers();
       loadPendingInvitations();
+      alert('Invitation accepted! You are now connected.');
     } catch (error: any) {
+      console.error('Error accepting invitation:', error);
       alert('Error accepting invitation: ' + error.message);
     }
   };
@@ -176,11 +163,16 @@ export const CircleSection: React.FC = () => {
   const handleDeclineInvite = async (invitationId: string) => {
     try {
       await supabase.from('circle_invitations')
-        .update({ status: 'declined' })
+        .update({ 
+          status: 'declined',
+          responded_at: new Date().toISOString()
+        })
         .eq('id', invitationId);
 
       loadPendingInvitations();
+      alert('Invitation declined.');
     } catch (error: any) {
+      console.error('Error declining invitation:', error);
       alert('Error declining invitation: ' + error.message);
     }
   };
@@ -206,7 +198,7 @@ export const CircleSection: React.FC = () => {
               </div>
               <div className="flex gap-2">
                 <button
-                  onClick={() => handleAcceptInvite(inv.id, inv.sender_id)}
+                  onClick={() => handleAcceptInvite(inv.id, inv.inviter_id)}
                   className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
                 >
                   Accept
