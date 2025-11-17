@@ -8,7 +8,8 @@ import { Bell, Check, Trash2 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { UpcomingReminders } from '@/components/notifications/UpcomingReminders';
-
+import AppLayout from '@/components/AppLayout';
+import { AppProvider } from '@/contexts/AppContext';
 
 interface Notification {
   id: string;
@@ -20,7 +21,7 @@ interface Notification {
   created_at: string;
 }
 
-export default function Notifications() {
+function NotificationsContent() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -85,9 +86,8 @@ export default function Notifications() {
   if (loading) return <div className="p-4">Loading...</div>;
 
   return (
-    <div className="p-4 max-w-4xl mx-auto space-y-4">
+    <div className="p-4 pb-20 max-w-4xl mx-auto space-y-4">
       {user && <UpcomingReminders userId={user.id} />}
-      
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
@@ -144,5 +144,15 @@ export default function Notifications() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function Notifications() {
+  return (
+    <AppProvider>
+      <AppLayout>
+        <NotificationsContent />
+      </AppLayout>
+    </AppProvider>
   );
 }
