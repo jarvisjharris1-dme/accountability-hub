@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { CircleMemberCard } from '../ui/CircleMemberCard';
 import { VerifiedOnlyFeature } from '../VerifiedOnlyFeature';
 import { supabase } from '@/lib/supabase';
@@ -25,6 +26,7 @@ interface Invitation {
 
 export const CircleSection: React.FC = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteMessage, setInviteMessage] = useState('');
   const [members, setMembers] = useState<CircleMember[]>([]);
@@ -113,64 +115,63 @@ export const CircleSection: React.FC = () => {
   };
 
   const handleInvite = async (e: React.FormEvent) => {
-  e.preventDefault();
-  if (!inviteEmail.trim()) return;
+    e.preventDefault();
+    if (!inviteEmail.trim()) return;
 
-  try {
-    // First, create the invitation in database
-    const { data: invitation, error: inviteError } = await supabase
-      .from('circle_invitations')
-      .insert({
-        inviter_id: user?.id,
-        invitee_email: inviteEmail.trim(),
-        recipient_email: inviteEmail.trim(),
-        message: inviteMessage.trim() || 'Join my accountability circle!',
-        status: 'pending'
-      })
-      .select()
-      .single();
-
-    if (inviteError) throw inviteError;
-
-    // Get user's name for the email
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('full_name')
-      .eq('id', user?.id)
-      .single();
-
-    // Then, send email via Edge Function
     try {
-      const { error: emailError } = await supabase.functions.invoke('send-circle-invitation', {
-        body: {
-          inviterId: user?.id,
-          inviterName: profile?.full_name || user?.email || 'Someone',
-          inviteeEmail: inviteEmail.trim(),
+      // First, create the invitation in database
+      const { data: invitation, error: inviteError } = await supabase
+        .from('circle_invitations')
+        .insert({
+          inviter_id: user?.id,
+          invitee_email: inviteEmail.trim(),
+          recipient_email: inviteEmail.trim(),
           message: inviteMessage.trim() || 'Join my accountability circle!',
-          invitationId: invitation.id
+          status: 'pending'
+        })
+        .select()
+        .single();
+
+      if (inviteError) throw inviteError;
+
+      // Get user's name for the email
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', user?.id)
+        .single();
+
+      // Then, send email via Edge Function
+      try {
+        const { error: emailError } = await supabase.functions.invoke('send-circle-invitation', {
+          body: {
+            inviterId: user?.id,
+            inviterName: profile?.full_name || user?.email || 'Someone',
+            inviteeEmail: inviteEmail.trim(),
+            message: inviteMessage.trim() || 'Join my accountability circle!',
+            invitationId: invitation.id
+          }
+        });
+
+        if (emailError) {
+          console.error('Email sending failed:', emailError);
+          alert(`Invitation saved but email may not have sent. The invitee can still see it when they log in.`);
+        } else {
+          alert(`✅ Invitation sent to ${inviteEmail}! They will receive an email and in-app notification.`);
         }
-      });
-
-      if (emailError) {
-        console.error('Email sending failed:', emailError);
-        alert(`Invitation saved but email may not have sent. The invitee can still see it when they log in.`);
-      } else {
-        alert(`Invitation sent to ${inviteEmail}! They will receive an email and in-app notification.`);
+      } catch (emailError) {
+        console.error('Email function error:', emailError);
+        alert(`Invitation saved! Email sending failed but they can see it when they log in.`);
       }
-    } catch (emailError) {
-      console.error('Email function error:', emailError);
-      alert(`Invitation saved! Email sending failed but they can see it when they log in.`);
+
+      setInviteEmail('');
+      setInviteMessage('');
+      
+    } catch (error: any) {
+      console.error('Error sending invitation:', error);
+      alert('Error sending invitation: ' + error.message);
     }
-
-    setInviteEmail('');
-    setInviteMessage('');
-    
-  } catch (error: any) {
-    console.error('Error sending invitation:', error);
-    alert('Error sending invitation: ' + error.message);
-  }
-};
-
+  };
 
   const handleAcceptInvite = async (invitationId: string, inviterId: string) => {
     try {
@@ -212,7 +213,10 @@ export const CircleSection: React.FC = () => {
   };
 
   const handleMessage = (memberId: string) => {
-    alert(`Messaging feature coming soon for member ${memberId}`);
+    // Store the member ID to auto-select in Messages
+    sessionStorage.setItem('autoSelectMemberId', memberId);
+    // Navigate to home with messages tab
+    navigate('/', { state: { tab: 'messages' } });
   };
 
   if (loading) {
