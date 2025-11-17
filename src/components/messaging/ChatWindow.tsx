@@ -68,7 +68,7 @@ export function ChatWindow({ recipientId, recipientName, recipientAvatar, groupI
 
     const { data: membersData } = await supabase
       .from('group_members')
-      .select('*, profiles(full_name, avatar_url)')
+      .select('*, profiles(full_name, avatar)')  // ✅ FIXED: Changed avatar_url to avatar
       .eq('group_id', groupId);
     
     if (membersData) setMembers(membersData);
@@ -133,6 +133,9 @@ export function ChatWindow({ recipientId, recipientName, recipientAvatar, groupI
       setNewMessage('');
       setReplyingTo(null);
       loadMessages();
+    } else {
+      console.error('Error sending message:', error);
+      alert('Failed to send message: ' + error.message);
     }
   };
 
