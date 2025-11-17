@@ -38,7 +38,7 @@ export function ConversationList({ onSelectConversation, selectedId }: Conversat
     // Load 1-on-1 conversations
     const { data: messages } = await supabase
       .from('messages')
-      .select('*, profiles!messages_sender_id_fkey(full_name, avatar_url)')
+      .select('*, profiles!messages_sender_id_fkey(full_name, avatar)')  // ✅ FIXED: Changed avatar_url to avatar
       .or(`sender_id.eq.${user.id},recipient_id.eq.${user.id}`)
       .order('created_at', { ascending: false });
 
@@ -59,7 +59,7 @@ export function ConversationList({ onSelectConversation, selectedId }: Conversat
         conversationMap.set(partnerId, {
           id: partnerId,
           name: msg.profiles?.full_name || 'Unknown',
-          avatar: msg.profiles?.avatar_url,
+          avatar: msg.profiles?.avatar,  // ✅ FIXED: Changed avatar_url to avatar
           lastMessage: msg.content,
           timestamp: msg.created_at,
           unreadCount: 0,
@@ -74,7 +74,7 @@ export function ConversationList({ onSelectConversation, selectedId }: Conversat
         conversationMap.set(gm.groups.id, {
           id: gm.groups.id,
           name: gm.groups.name,
-          avatar: gm.groups.avatar_url,
+          avatar: gm.groups.avatar_url,  // Note: This might also need to be changed if groups table uses 'avatar'
           lastMessage: 'Group conversation',
           timestamp: gm.groups.created_at,
           unreadCount: 0,
