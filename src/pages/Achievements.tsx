@@ -5,6 +5,8 @@ import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Trophy, TrendingUp } from 'lucide-react';
 import { toast } from 'sonner';
+import AppLayout from '@/components/AppLayout';
+import { AppProvider } from '@/contexts/AppContext';
 
 interface Achievement {
   id: string;
@@ -17,7 +19,7 @@ interface Achievement {
   earned_at?: string;
 }
 
-export default function Achievements() {
+function AchievementsContent() {
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [totalPoints, setTotalPoints] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -67,7 +69,7 @@ export default function Achievements() {
   const filtered = (cat: string) => cat === 'all' ? achievements : achievements.filter(a => a.category === cat);
 
   return (
-    <div className="container mx-auto p-6 max-w-6xl">
+    <div className="container mx-auto p-6 pb-20 max-w-6xl">
       <div className="mb-8">
         <h1 className="text-3xl font-bold mb-2 flex items-center gap-2">
           <Trophy className="w-8 h-8 text-yellow-500" />
@@ -92,6 +94,7 @@ export default function Achievements() {
             <TabsTrigger key={cat} value={cat} className="capitalize">{cat}</TabsTrigger>
           ))}
         </TabsList>
+
         {categories.map(cat => (
           <TabsContent key={cat} value={cat}>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -103,5 +106,15 @@ export default function Achievements() {
         ))}
       </Tabs>
     </div>
+  );
+}
+
+export default function Achievements() {
+  return (
+    <AppProvider>
+      <AppLayout>
+        <AchievementsContent />
+      </AppLayout>
+    </AppProvider>
   );
 }
