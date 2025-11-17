@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { DashboardHero } from './sections/DashboardHero';
 import { DashboardStats } from './sections/DashboardStats';
 import { EmergencyButton } from './ui/EmergencyButton';
@@ -23,6 +23,7 @@ interface AppLayoutProps {
 
 const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [showEmergencyModal, setShowEmergencyModal] = useState(false);
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -59,6 +60,13 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     loadCircleSize();
     loadJournalCount();
   }, [authUser]);
+
+  // Handle navigation state (e.g., from Circle to Messages)
+  useEffect(() => {
+    if (location.state?.tab) {
+      setActiveTab(location.state.tab);
+    }
+  }, [location]);
 
   const updateCircleActivity = async () => {
     if (!authUser) return;
