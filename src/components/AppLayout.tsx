@@ -32,6 +32,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const { user: authUser } = useAuth();
 
   const handleTabChange = (tab: string) => {
+    // External pages - navigate to their routes
     if (tab === 'analytics') {
       navigate('/analytics');
     } else if (tab === 'goals') {
@@ -41,7 +42,14 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     } else if (tab === 'achievements') {
       navigate('/achievements');
     } else {
-      setActiveTab(tab);
+      // Internal tabs - navigate back to home if on external page
+      if (window.location.pathname !== '/') {
+        navigate('/');
+        // Small delay to ensure navigation completes before setting tab
+        setTimeout(() => setActiveTab(tab), 50);
+      } else {
+        setActiveTab(tab);
+      }
     }
   };
 
