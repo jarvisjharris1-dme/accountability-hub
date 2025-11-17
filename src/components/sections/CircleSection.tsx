@@ -113,30 +113,63 @@ export const CircleSection: React.FC = () => {
   };
 
   const handleInvite = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inviteEmail.trim()) return;
+  e.preventDefault();
+  if (!inviteEmail.trim()) return;
 
+  try {
+    // First, create the invitation in database
+    const { data: invitation, error: inviteError } = await supabase
+      .from('circle_invitations')
+      .insert({
+        inviter_id: user?.id,
+        invitee_email: inviteEmail.trim(),
+        recipient_email: inviteEmail.trim(),
+        message: inviteMessage.trim() || 'Join my accountability circle!',
+        status: 'pending'
+      })
+      .select()
+      .single();
+
+    if (inviteError) throw inviteError;
+
+    // Get user's name for the email
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('full_name')
+      .eq('id', user?.id)
+      .single();
+
+    // Then, send email via Edge Function
     try {
-      const { error } = await supabase
-        .from('circle_invitations')
-        .insert({
-          inviter_id: user?.id,
-          invitee_email: inviteEmail.trim(),
-          recipient_email: inviteEmail.trim(), // Same as invitee_email
+      const { error: emailError } = await supabase.functions.invoke('send-circle-invitation', {
+        body: {
+          inviterId: user?.id,
+          inviterName: profile?.full_name || user?.email || 'Someone',
+          inviteeEmail: inviteEmail.trim(),
           message: inviteMessage.trim() || 'Join my accountability circle!',
-          status: 'pending'
-        });
+          invitationId: invitation.id
+        }
+      });
 
-      if (error) throw error;
-
-      alert(`Invitation sent to ${inviteEmail}`);
-      setInviteEmail('');
-      setInviteMessage('');
-    } catch (error: any) {
-      console.error('Error sending invitation:', error);
-      alert('Error sending invitation: ' + error.message);
+      if (emailError) {
+        console.error('Email sending failed:', emailError);
+        alert(`Invitation saved but email may not have sent. The invitee can still see it when they log in.`);
+      } else {
+        alert(`Invitation sent to ${inviteEmail}! They will receive an email and in-app notification.`);
+      }
+    } catch (emailError) {
+      console.error('Email function error:', emailError);
+      alert(`Invitation saved! Email sending failed but they can see it when they log in.`);
     }
-  };
+
+    setInviteEmail('');
+    setInviteMessage('');
+    
+  } catch (error: any) {
+    console.error('Error sending invitation:', error);
+    alert('Error sending invitation: ' + error.message);
+  }
+};
 
 
   const handleAcceptInvite = async (invitationId: string, inviterId: string) => {
