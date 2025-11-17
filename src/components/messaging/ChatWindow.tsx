@@ -68,23 +68,30 @@ export function ChatWindow({ recipientId, recipientName, recipientAvatar, groupI
 
     const { data: membersData } = await supabase
       .from('group_members')
-      .select('*, profiles(full_name, avatar)')  // ✅ FIXED: Changed avatar_url to avatar
+      .select('*, profiles(full_name, avatar)')
       .eq('group_id', groupId);
     
     if (membersData) setMembers(membersData);
   };
 
   const loadMessages = async () => {
+    if (!user) return;
+    
     let query = supabase.from('messages').select('*');
     
     if (groupId) {
       query = query.eq('group_id', groupId);
     } else if (recipientId) {
-      query = query.or(`and(sender_id.eq.${user?.id},recipient_id.eq.${recipientId}),and(sender_id.eq.${recipientId},recipient_id.eq.${user?.id})`);
+      query = query.or(`and(sender_id.eq.${user.id},recipient_id.eq.${recipientId}),and(sender_id.eq.${recipientId},recipient_id.eq.${user.id})`);
     }
     
-    const { data } = await query.order('created_at', { ascending: true });
-    if (data) setMessages(data);
+    const { data, error } = await query.order('created_at', { ascending: true });
+    
+    if (error) {
+      console.error('Error loading messages:', error);
+    } else if (data) {
+      setMessages(data);
+    }
   };
 
   const detectMentions = (text: string) => {
@@ -118,15 +125,17 @@ export function ChatWindow({ recipientId, recipientName, recipientAvatar, groupI
     e.preventDefault();
     if (!newMessage.trim() || !user) return;
 
-    const mentions = groupId ? detectMentions(newMessage) : [];
-
+    // Insert message without mentions column (it doesn't exist in your schema)
     const { error } = await supabase.from('messages').insert({
       sender_id: user.id,
       recipient_id: groupId ? null : recipientId,
       group_id: groupId || null,
       content: newMessage.trim(),
-      mentions,
       reply_to_message_id: replyingTo?.id || null,
+      topic: 'chat', // Required field
+      extension: 'text', // Required field
+      read: false,
+      message_type: 'text'
     });
 
     if (!error) {
