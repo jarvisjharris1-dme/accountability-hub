@@ -13,15 +13,15 @@ import NotificationSettings from './sections/NotificationSettings';
 import NotificationPermissionBanner from './ui/NotificationPermissionBanner';
 import { EmailVerificationBanner } from './ui/EmailVerificationBanner';
 import { BottomNav } from './navigation/BottomNav';
-
-
-
-
 import { UserProfile, AccountabilityArea } from '../types';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 
-const AppLayout: React.FC = () => {
+interface AppLayoutProps {
+  children?: React.ReactNode;
+}
+
+const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [showEmergencyModal, setShowEmergencyModal] = useState(false);
@@ -44,8 +44,6 @@ const AppLayout: React.FC = () => {
       setActiveTab(tab);
     }
   };
-
-
 
   useEffect(() => {
     loadUserProfile();
@@ -131,7 +129,6 @@ const AppLayout: React.FC = () => {
     }
   };
 
-
   const handleEmergencyTrigger = () => {
     setShowEmergencyModal(true);
   };
@@ -153,6 +150,12 @@ const AppLayout: React.FC = () => {
   }
 
   const renderContent = () => {
+    // If children are provided, render them instead of internal routing
+    if (children) {
+      return children;
+    }
+
+    // Otherwise use internal routing
     switch (activeTab) {
       case 'dashboard':
         return (
@@ -180,8 +183,6 @@ const AppLayout: React.FC = () => {
         return <NotificationSettings />;
       case 'profile':
         return <ProfileSection user={user} onUpdate={handleProfileUpdate} />;
-
-
       default:
         return null;
     }
@@ -215,13 +216,13 @@ const AppLayout: React.FC = () => {
       </header>
 
       <div className="max-w-7xl mx-auto px-4 py-8">
-
         <NotificationPermissionBanner />
         {authUser && !authUser.email_confirmed_at && authUser.email && (
           <EmailVerificationBanner email={authUser.email} />
         )}
         {renderContent()}
       </div>
+
       <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
 
       <EmergencyModal 
@@ -231,8 +232,6 @@ const AppLayout: React.FC = () => {
       />
     </div>
   );
-
 };
 
 export default AppLayout;
-
