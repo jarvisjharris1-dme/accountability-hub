@@ -80,7 +80,12 @@ export function ChatWindow({
   const loadMessages = useCallback(async () => {
     if (!user) return;
     
-    let query = supabase.from('messages').select('*');
+    let query = supabase
+      .from('messages')
+      .select(`
+        *,
+        sender:profiles(full_name, avatar)
+      `);
     
     if (groupId) {
       query = query.eq('group_id', groupId);
@@ -95,7 +100,13 @@ export function ChatWindow({
     if (error) {
       console.error('Error loading messages:', error);
     } else if (data) {
-      setMessages(data);
+      // Transform data to flatten profile info for MessageBubble
+      const transformedMessages = data.map(msg => ({
+        ...msg,
+        sender_name: msg.sender?.full_name || 'Unknown',
+        sender_avatar: msg.sender?.avatar || '',
+      }));
+      setMessages(transformedMessages);
     }
   }, [user, groupId, recipientId]);
 
@@ -156,16 +167,9 @@ export function ChatWindow({
           table: 'messages',
           filter: channelFilter
         },
-        (payload) => {
-          if (payload.eventType === 'INSERT') {
-            setMessages(prev => [...prev, payload.new as Message]);
-          } else if (payload.eventType === 'UPDATE') {
-            setMessages(prev => 
-              prev.map(msg => msg.id === payload.new.id ? payload.new as Message : msg)
-            );
-          } else if (payload.eventType === 'DELETE') {
-            setMessages(prev => prev.filter(msg => msg.id !== payload.old.id));
-          }
+        () => {
+          // Reload messages to get joined profile data
+          loadMessages();
         }
       )
       .subscribe();
@@ -173,7 +177,7 @@ export function ChatWindow({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user, groupId, recipientId]);
+  }, [user, groupId, recipientId, loadMessages]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -253,6 +257,96 @@ export function ChatWindow({
     setIsRecording(false);
   };
 
+  const handleAddReaction = async (messageId: string, emoji: string) => {
+    if (!user) return;
+    
+    const { error } = await supabase
+      .from('message_reactions')
+      .insert({
+        message_id: messageId,
+        user_id: user.id,
+        emoji
+      });
+    
+    if (error) {
+      console.error('Error adding reaction:', error);
+    } else {
+      loadMessages();
+    }
+  };
+
+  const handleRemoveReaction = async (messageId: string, emoji: string) => {
+    if (!user) return;
+    
+    const { error } = await supabase
+      .from('message_reactions')
+      .delete()
+      .eq('message_id', messageId)
+      .eq('user_id', user.id)
+      .eq('emoji', emoji);
+    
+    if (error) {
+      console.error('Error removing reaction:', error);
+    } else {
+      loadMessages();
+    }
+  };
+
+  const handlePinMessage = async (messageId: string, note?: string) => {
+    const { error } = await supabase
+      .from('messages')
+      .update({ is_pinned: true, pin_note: note })
+      .eq('id', messageId);
+    
+    if (error) {
+      console.error('Error pinning message:', error);
+    } else {
+      loadMessages();
+    }
+  };
+
+  const handleUnpinMessage = async (messageId: string) => {
+    const { error } = await supabase
+      .from('messages')
+      .update({ is_pinned: false, pin_note: null })
+      .eq('id', messageId);
+    
+    if (error) {
+      console.error('Error unpinning message:', error);
+    } else {
+      loadMessages();
+    }
+  };
+
+  const handleEditMessage = async (messageId: string, newContent: string) => {
+    const { error } = await supabase
+      .from('messages')
+      .update({ 
+        content: newContent, 
+        edited_at: new Date().toISOString() 
+      })
+      .eq('id', messageId);
+    
+    if (error) {
+      console.error('Error editing message:', error);
+    } else {
+      loadMessages();
+    }
+  };
+
+  const handleDeleteMessage = async (messageId: string) => {
+    const { error } = await supabase
+      .from('messages')
+      .delete()
+      .eq('id', messageId);
+    
+    if (error) {
+      console.error('Error deleting message:', error);
+    } else {
+      loadMessages();
+    }
+  };
+
   const startVoiceCall = () => {
     alert('Voice call feature coming soon with Twilio integration');
   };
@@ -313,14 +407,21 @@ export function ChatWindow({
         onScroll={handleScroll}
       >
         {filteredMessages.map((message) => (
-          <MessageBubble
-            key={message.id}
-            id={`message-${message.id}`}
-            message={message}
-            isOwn={message.sender_id === user?.id}
-            onReply={() => setReplyingTo(message)}
-            highlighted={message.id === highlightMessageId}
-          />
+          <div key={message.id} id={`message-${message.id}`}>
+            <MessageBubble
+              message={message}
+              isOwn={message.sender_id === user?.id}
+              searchQuery={searchQuery}
+              onReply={() => setReplyingTo(message)}
+              onAddReaction={(messageId, emoji) => handleAddReaction(messageId, emoji)}
+              onRemoveReaction={(messageId, emoji) => handleRemoveReaction(messageId, emoji)}
+              onPin={(messageId, note) => handlePinMessage(messageId, note)}
+              onUnpin={(messageId) => handleUnpinMessage(messageId)}
+              onEdit={(messageId, newContent) => handleEditMessage(messageId, newContent)}
+              onDelete={(messageId) => handleDeleteMessage(messageId)}
+              onNavigateToReply={scrollToMessage}
+            />
+          </div>
         ))}
         <div ref={messagesEndRef} />
       </div>
