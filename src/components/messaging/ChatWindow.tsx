@@ -26,8 +26,6 @@ interface ChatWindowProps {
 interface MessageInsert {
   sender_id: string;
   content: string;
-  topic: string;
-  extension: string;
   recipient_id?: string;
   group_id?: string;
   reply_to_message_id?: string;
@@ -224,8 +222,6 @@ export function ChatWindow({
     const messageData: MessageInsert = {
       sender_id: user.id,
       content: newMessage.trim(),
-      topic: 'chat',
-      extension: 'text',
     };
 
     if (recipientId) {
