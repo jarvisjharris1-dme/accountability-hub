@@ -84,7 +84,7 @@ export function ChatWindow({
       .from('messages')
       .select(`
         *,
-        sender:profiles!sender_id(full_name, avatar)
+        sender:profiles!messages_sender_id_profiles_fkey(full_name, avatar)
       `);
     
     if (groupId) {
@@ -498,3 +498,4 @@ export function ChatWindow({
     </div>
   );
 }
+
