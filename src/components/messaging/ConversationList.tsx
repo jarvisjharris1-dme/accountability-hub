@@ -38,7 +38,7 @@ export function ConversationList({ onSelectConversation, selectedId }: Conversat
     // Load 1-on-1 conversations
     const { data: messages } = await supabase
       .from('messages')
-      .select('*, profiles!messages_sender_id_fkey(full_name, avatar)')  // ✅ FIXED: Changed avatar_url to avatar
+     .select('*, profiles!messages_sender_id_profiles_fkey(full_name, avatar)')  // ✅ FIXED: Changed avatar_url to avatar
       .or(`sender_id.eq.${user.id},recipient_id.eq.${user.id}`)
       .order('created_at', { ascending: false });
 
