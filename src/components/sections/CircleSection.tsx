@@ -26,8 +26,26 @@ interface PendingInvite {
 
 // Helper for safely extracting error messages
 const getErrorMessage = (error: unknown): string => {
+  if (!error) return 'Unknown error';
+  
+  // Handle Supabase error objects
+  if (typeof error === 'object' && error !== null) {
+    const supabaseError = error as any;
+    if (supabaseError.message) return supabaseError.message;
+    if (supabaseError.error_description) return supabaseError.error_description;
+    if (supabaseError.msg) return supabaseError.msg;
+    if (supabaseError.hint) return `${supabaseError.message || 'Error'} (Hint: ${supabaseError.hint})`;
+  }
+  
+  // Handle standard Error objects
   if (error instanceof Error) return error.message;
-  return String(error);
+  
+  // Fallback to JSON string
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
+  }
 };
 
 export function CircleSection() {
@@ -119,11 +137,15 @@ export function CircleSection() {
         .insert({
           inviter_id: user.id,
           invitee_email: inviteEmail.trim(),
+          recipient_email: inviteEmail.trim(), // Add this - some schemas require both
           message: inviteMessage.trim() || 'Join my accountability circle!',
           status: 'pending'
         });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Full error object:', error);
+        throw error;
+      }
 
       alert('Invitation sent successfully!');
       setInviteEmail('');
@@ -131,7 +153,8 @@ export function CircleSection() {
       setShowInviteForm(false);
     } catch (error: unknown) {
       const msg = getErrorMessage(error);
-      console.error('Error sending invitation:', msg);
+      console.error('Error sending invitation:', error);
+      console.error('Error message:', msg);
       alert('Error sending invitation: ' + msg);
     }
   };
@@ -139,10 +162,12 @@ export function CircleSection() {
   const handleAcceptInvite = async (invitationId: string, inviterId: string) => {
     if (!user?.id) return;
 
+    // Remove from UI immediately
     setPendingInvites(prev => prev.filter(inv => inv.id !== invitationId));
 
     try {
-      await supabase
+      // Update invitation status
+      const { error: updateError } = await supabase
         .from('circle_invitations')
         .update({ 
           status: 'accepted',
@@ -150,30 +175,40 @@ export function CircleSection() {
         })
         .eq('id', invitationId);
 
-      await supabase
+      if (updateError) {
+        console.error('Error updating invitation:', updateError);
+      }
+
+      // Add bidirectional relationships
+      const { error: member1Error } = await supabase
         .from('circle_members')
         .insert({
           user_id: user.id,
           member_id: inviterId
         });
 
-      await supabase
+      if (member1Error && member1Error.code !== '23505') {
+        console.error('Error creating member relationship 1:', member1Error);
+      }
+
+      const { error: member2Error } = await supabase
         .from('circle_members')
         .insert({
           user_id: inviterId,
           member_id: user.id
         });
 
+      if (member2Error && member2Error.code !== '23505') {
+        console.error('Error creating member relationship 2:', member2Error);
+      }
+
       await loadMembers();
-      
       alert('Invitation accepted! You are now connected.');
     } catch (error: unknown) {
       console.error('Error in database operations:', error);
       await loadMembers();
       
       const msg = getErrorMessage(error);
-      // Check for duplicate key error code explicitly
-      // '23505' is the Postgres code for unique_violation
       const isDuplicate = msg.includes('duplicate') || (error as any)?.code === '23505';
 
       if (!isDuplicate) {
@@ -185,16 +220,21 @@ export function CircleSection() {
   };
 
   const handleDeclineInvite = async (invitationId: string) => {
+    // Remove from UI immediately
     setPendingInvites(prev => prev.filter(inv => inv.id !== invitationId));
 
     try {
-      await supabase
+      const { error } = await supabase
         .from('circle_invitations')
         .update({ 
           status: 'declined',
           responded_at: new Date().toISOString()
         })
         .eq('id', invitationId);
+
+      if (error) {
+        console.error('Error declining invitation:', error);
+      }
 
       alert('Invitation declined.');
     } catch (error: unknown) {
