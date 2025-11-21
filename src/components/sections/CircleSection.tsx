@@ -1,172 +1,119 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CircleMemberCard } from '../ui/CircleMemberCard';
-import { VerifiedOnlyFeature } from '../VerifiedOnlyFeature';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-
+import { CircleMemberCard } from '../circle/CircleMemberCard';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { UserPlus } from 'lucide-react';
 
 interface CircleMember {
   id: string;
-  name: string;
-  avatar: string;
-  lastActive: string;
-  status: 'active' | 'away';
-  streak: number;
+  member_id: string;
+  member_name: string;
+  member_avatar?: string;
+  streak_days: number;
 }
 
-interface Invitation {
+interface PendingInvite {
   id: string;
   inviter_id: string;
-  invitee_email: string;
-  message: string;
-  created_at: string;
   sender_name: string;
+  message: string;
 }
 
-export const CircleSection: React.FC = () => {
+export function CircleSection() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [members, setMembers] = useState<CircleMember[]>([]);
+  const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([]);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteMessage, setInviteMessage] = useState('');
-  const [members, setMembers] = useState<CircleMember[]>([]);
-  const [pendingInvites, setPendingInvites] = useState<Invitation[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showInviteForm, setShowInviteForm] = useState(false);
 
   useEffect(() => {
     if (user) {
-      loadCircleMembers();
+      loadMembers();
       loadPendingInvitations();
     }
   }, [user]);
 
-  const loadCircleMembers = async () => {
+  const loadMembers = async () => {
+    if (!user?.id) return;
+
     try {
       const { data, error } = await supabase
         .from('circle_members')
-        .select(`
-          id,
-          member_id,
-          last_active,
-          profiles!circle_members_member_id_fkey (
-            full_name,
-            avatar,
-            streak_days
-          )
-        `)
-        .eq('user_id', user?.id);
+        .select('id, member_id, profiles!circle_members_member_id_fkey(full_name, avatar, streak_days)')
+        .eq('user_id', user.id);
 
-      if (error) throw error;
-
-      const formattedMembers = data?.map((item: any) => ({
-        id: item.member_id,
-        name: item.profiles?.full_name || 'Anonymous',
-        avatar: item.profiles?.avatar || '',
-        lastActive: new Date(item.last_active).toLocaleDateString(),
-        status: isRecent(item.last_active) ? 'active' : 'away',
-        streak: item.profiles?.streak_days || 0
-      })) || [];
-
-      setMembers(formattedMembers);
+      if (error) {
+        console.error('Error loading circle members:', error);
+      } else if (data) {
+        const formattedMembers = data.map(item => ({
+          id: item.id,
+          member_id: item.member_id,
+          member_name: item.profiles?.full_name || 'Unknown',
+          member_avatar: item.profiles?.avatar,
+          streak_days: item.profiles?.streak_days || 0
+        }));
+        setMembers(formattedMembers);
+      }
     } catch (error) {
-      console.error('Error loading circle members:', error);
+      console.error('Error loading members:', error);
     } finally {
       setLoading(false);
     }
   };
 
   const loadPendingInvitations = async () => {
+    if (!user?.email) return;
+
     try {
       const { data, error } = await supabase
         .from('circle_invitations')
-        .select(`
-          id,
-          inviter_id,
-          invitee_email,
-          message,
-          created_at,
-          profiles!circle_invitations_inviter_id_fkey (full_name)
-        `)
-        .eq('invitee_email', user?.email)
-        .eq('status', 'pending');
+        .select('*, inviter:profiles!circle_invitations_inviter_id_fkey(full_name)')
+        .eq('invitee_email', user.email)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false });
 
-      if (error) throw error;
-
-      const formatted = data?.map((inv: any) => ({
-        id: inv.id,
-        inviter_id: inv.inviter_id,
-        invitee_email: inv.invitee_email,
-        message: inv.message,
-        created_at: inv.created_at,
-        sender_name: inv.profiles?.full_name || 'Someone'
-      })) || [];
-
-      setPendingInvites(formatted);
+      if (error) {
+        console.error('Error loading invitations:', error);
+      } else if (data) {
+        setPendingInvites(data.map(inv => ({
+          id: inv.id,
+          inviter_id: inv.inviter_id,
+          sender_name: inv.inviter?.full_name || 'Someone',
+          message: inv.message || 'Join my accountability circle!'
+        })));
+      }
     } catch (error) {
       console.error('Error loading invitations:', error);
     }
   };
 
-  const isRecent = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
-    return diffHours < 24;
-  };
-
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inviteEmail.trim()) return;
+    if (!inviteEmail.trim() || !user?.id) return;
 
     try {
-      // First, create the invitation in database
-      const { data: invitation, error: inviteError } = await supabase
+      const { error } = await supabase
         .from('circle_invitations')
         .insert({
-          inviter_id: user?.id,
+          inviter_id: user.id,
           invitee_email: inviteEmail.trim(),
-          recipient_email: inviteEmail.trim(),
           message: inviteMessage.trim() || 'Join my accountability circle!',
           status: 'pending'
-        })
-        .select()
-        .single();
-
-      if (inviteError) throw inviteError;
-
-      // Get user's name for the email
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('full_name')
-        .eq('id', user?.id)
-        .single();
-
-      // Then, send email via Edge Function
-      try {
-        const { error: emailError } = await supabase.functions.invoke('send-circle-invitation', {
-          body: {
-            inviterId: user?.id,
-            inviterName: profile?.full_name || user?.email || 'Someone',
-            inviteeEmail: inviteEmail.trim(),
-            message: inviteMessage.trim() || 'Join my accountability circle!',
-            invitationId: invitation.id
-          }
         });
 
-        if (emailError) {
-          console.error('Email sending failed:', emailError);
-          alert(`Invitation saved but email may not have sent. The invitee can still see it when they log in.`);
-        } else {
-          alert(`✅ Invitation sent to ${inviteEmail}! They will receive an email and in-app notification.`);
-        }
-      } catch (emailError) {
-        console.error('Email function error:', emailError);
-        alert(`Invitation saved! Email sending failed but they can see it when they log in.`);
-      }
+      if (error) throw error;
 
+      alert('Invitation sent successfully!');
       setInviteEmail('');
       setInviteMessage('');
-      
+      setShowInviteForm(false);
     } catch (error: any) {
       console.error('Error sending invitation:', error);
       alert('Error sending invitation: ' + error.message);
@@ -174,20 +121,49 @@ export const CircleSection: React.FC = () => {
   };
 
   const handleAcceptInvite = async (invitationId: string, inviterId: string) => {
+    if (!user?.id) return;
+
     try {
-      await supabase.from('circle_invitations').update({ 
-        status: 'accepted',
-        invitee_id: user?.id,
-        responded_at: new Date().toISOString()
-      }).eq('id', invitationId);
+      // Update invitation status
+      const { error: updateError } = await supabase
+        .from('circle_invitations')
+        .update({ 
+          status: 'accepted',
+          responded_at: new Date().toISOString()
+        })
+        .eq('id', invitationId);
 
-      await supabase.from('circle_members').insert([
-        { user_id: inviterId, member_id: user?.id },
-        { user_id: user?.id, member_id: inviterId }
-      ]);
+      if (updateError) throw updateError;
 
-      loadCircleMembers();
-      loadPendingInvitations();
+      // Add bidirectional circle member relationships
+      const { error: member1Error } = await supabase
+        .from('circle_members')
+        .insert({
+          user_id: user.id,
+          member_id: inviterId
+        });
+
+      if (member1Error && member1Error.code !== '23505') { // Ignore duplicate errors
+        throw member1Error;
+      }
+
+      const { error: member2Error } = await supabase
+        .from('circle_members')
+        .insert({
+          user_id: inviterId,
+          member_id: user.id
+        });
+
+      if (member2Error && member2Error.code !== '23505') { // Ignore duplicate errors
+        throw member2Error;
+      }
+
+      // Immediately remove from UI state
+      setPendingInvites(prev => prev.filter(inv => inv.id !== invitationId));
+      
+      // Reload members list to show new member
+      await loadMembers();
+      
       alert('Invitation accepted! You are now connected.');
     } catch (error: any) {
       console.error('Error accepting invitation:', error);
@@ -197,14 +173,19 @@ export const CircleSection: React.FC = () => {
 
   const handleDeclineInvite = async (invitationId: string) => {
     try {
-      await supabase.from('circle_invitations')
+      const { error } = await supabase
+        .from('circle_invitations')
         .update({ 
           status: 'declined',
           responded_at: new Date().toISOString()
         })
         .eq('id', invitationId);
 
-      loadPendingInvitations();
+      if (error) throw error;
+
+      // Immediately remove from UI state
+      setPendingInvites(prev => prev.filter(inv => inv.id !== invitationId));
+      
       alert('Invitation declined.');
     } catch (error: any) {
       console.error('Error declining invitation:', error);
@@ -220,87 +201,166 @@ export const CircleSection: React.FC = () => {
   };
 
   if (loading) {
-    return <div className="text-center py-8">Loading circle...</div>;
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#1a2332] mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading your circle...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
     <div className="space-y-6">
+      {/* Pending Invitations Section */}
       {pendingInvites.length > 0 && (
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-6">
           <h3 className="font-semibold text-[#1a2332] mb-4">Pending Invitations</h3>
-          {pendingInvites.map(inv => (
-            <div key={inv.id} className="bg-white p-4 rounded-lg mb-3 flex justify-between items-center">
-              <div>
-                <p className="font-medium">{inv.sender_name} invited you</p>
-                <p className="text-sm text-gray-600">{inv.message}</p>
+          <div className="space-y-3">
+            {pendingInvites.map(inv => (
+              <div 
+                key={inv.id} 
+                className="bg-white p-4 rounded-lg flex justify-between items-center shadow-sm"
+              >
+                <div>
+                  <p className="font-medium text-[#1a2332]">
+                    {inv.sender_name} invited you to their circle
+                  </p>
+                  <p className="text-sm text-gray-600 mt-1">{inv.message}</p>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={() => handleAcceptInvite(inv.id, inv.inviter_id)}
+                    className="bg-green-600 hover:bg-green-700 text-white"
+                  >
+                    Accept
+                  </Button>
+                  <Button
+                    onClick={() => handleDeclineInvite(inv.id)}
+                    variant="outline"
+                    className="text-gray-700 hover:bg-gray-100"
+                  >
+                    Decline
+                  </Button>
+                </div>
               </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => handleAcceptInvite(inv.id, inv.inviter_id)}
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-                >
-                  Accept
-                </button>
-                <button
-                  onClick={() => handleDeclineInvite(inv.id)}
-                  className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
-                >
-                  Decline
-                </button>
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       )}
 
+      {/* Main Circle Section */}
       <div className="bg-white rounded-xl p-6 shadow-md">
-        <h2 className="text-2xl font-bold text-[#1a2332] mb-4">My Accountability Circle</h2>
-        <p className="text-gray-600 mb-6">
-          Connect with 2-3 trusted men who will support your journey.
-        </p>
-
-        {members.length > 0 ? (
-          <div className="space-y-4 mb-6">
-            {members.map(member => (
-              <CircleMemberCard key={member.id} member={member} onMessage={handleMessage} />
-            ))}
+        <div className="flex justify-between items-center mb-4">
+          <div>
+            <h2 className="text-2xl font-bold text-[#1a2332]">My Accountability Circle</h2>
+            <p className="text-gray-600 mt-1">
+              Connect with 2-3 trusted men who will support your journey.
+            </p>
           </div>
-        ) : (
-          <p className="text-gray-500 mb-6">No circle members yet. Invite someone below!</p>
-        )}
+          <Button
+            onClick={() => setShowInviteForm(!showInviteForm)}
+            className="bg-[#1a2332] hover:bg-[#2d3e50] text-white"
+          >
+            <UserPlus className="w-4 h-4 mr-2" />
+            Invite Member
+          </Button>
+        </div>
 
-        <VerifiedOnlyFeature featureName="circle invitations">
-          {members.length < 3 && (
-            <form onSubmit={handleInvite} className="border-t pt-6">
-              <h3 className="font-semibold text-[#1a2332] mb-3">Invite a Member</h3>
-              <div className="space-y-3">
-                <input
+        {/* Invite Form */}
+        {showInviteForm && (
+          <div className="bg-gray-50 p-4 rounded-lg mb-6">
+            <form onSubmit={handleInvite} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Email Address
+                </label>
+                <Input
                   type="email"
                   value={inviteEmail}
                   onChange={(e) => setInviteEmail(e.target.value)}
-                  placeholder="Enter email address"
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#d4a574]"
+                  placeholder="friend@example.com"
                   required
                 />
-                <textarea
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Personal Message (Optional)
+                </label>
+                <Textarea
                   value={inviteMessage}
                   onChange={(e) => setInviteMessage(e.target.value)}
-                  placeholder="Personal message (optional)"
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#d4a574]"
-                  rows={2}
+                  placeholder="Join my accountability circle and let's grow together!"
+                  rows={3}
                 />
-                <button
-                  type="submit"
-                  className="w-full px-6 py-2 bg-[#d4a574] text-white rounded-lg font-medium hover:bg-[#c49564]"
-                >
+              </div>
+              <div className="flex gap-2">
+                <Button type="submit" className="bg-[#1a2332] hover:bg-[#2d3e50] text-white">
                   Send Invitation
-                </button>
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setShowInviteForm(false);
+                    setInviteEmail('');
+                    setInviteMessage('');
+                  }}
+                >
+                  Cancel
+                </Button>
               </div>
             </form>
-          )}
-        </VerifiedOnlyFeature>
+          </div>
+        )}
 
+        {/* Circle Members */}
+        {members.length > 0 ? (
+          <div className="space-y-4">
+            {members.map(member => (
+              <CircleMemberCard 
+                key={member.id} 
+                member={member} 
+                onMessage={handleMessage} 
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-12 bg-gray-50 rounded-lg">
+            <UserPlus className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+            <p className="text-gray-600 text-lg font-medium mb-2">
+              No circle members yet
+            </p>
+            <p className="text-gray-500 text-sm mb-4">
+              Start building your accountability circle by inviting trusted friends.
+            </p>
+            <Button
+              onClick={() => setShowInviteForm(true)}
+              className="bg-[#1a2332] hover:bg-[#2d3e50] text-white"
+            >
+              <UserPlus className="w-4 h-4 mr-2" />
+              Invite Your First Member
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {/* Info Section */}
+      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-6">
+        <h3 className="font-semibold text-[#1a2332] mb-3">About Your Circle</h3>
+        <div className="space-y-2 text-sm text-gray-700">
+          <p>
+            <strong>Accountability:</strong> Your circle members can see your check-ins and progress.
+          </p>
+          <p>
+            <strong>Support:</strong> Message your circle members directly for encouragement and advice.
+          </p>
+          <p>
+            <strong>Growth:</strong> Track each other's streaks and celebrate wins together.
+          </p>
+        </div>
       </div>
     </div>
   );
-};
+}
