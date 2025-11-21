@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 // Ensure these paths exist in your repo structure
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { CircleMemberCard } from '../circle/CircleMemberCard';
+import { CircleMemberCard } from '@/components/ui/CircleMemberCard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
