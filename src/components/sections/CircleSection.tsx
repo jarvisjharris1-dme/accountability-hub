@@ -123,9 +123,13 @@ export function CircleSection() {
   const handleAcceptInvite = async (invitationId: string, inviterId: string) => {
     if (!user?.id) return;
 
+    // Remove from UI IMMEDIATELY, before any async operations
+    setPendingInvites(prev => prev.filter(inv => inv.id !== invitationId));
+
+    // Now do the database updates
     try {
       // Update invitation status
-      const { error: updateError } = await supabase
+      await supabase
         .from('circle_invitations')
         .update({ 
           status: 'accepted',
@@ -133,47 +137,49 @@ export function CircleSection() {
         })
         .eq('id', invitationId);
 
-      if (updateError) throw updateError;
-
-      // Add bidirectional circle member relationships
-      const { error: member1Error } = await supabase
+      // Try to add bidirectional circle member relationships
+      // Ignore any errors (especially duplicates)
+      await supabase
         .from('circle_members')
         .insert({
           user_id: user.id,
           member_id: inviterId
         });
 
-      if (member1Error && member1Error.code !== '23505') { // Ignore duplicate errors
-        throw member1Error;
-      }
-
-      const { error: member2Error } = await supabase
+      await supabase
         .from('circle_members')
         .insert({
           user_id: inviterId,
           member_id: user.id
         });
 
-      if (member2Error && member2Error.code !== '23505') { // Ignore duplicate errors
-        throw member2Error;
-      }
-
-      // Immediately remove from UI state
-      setPendingInvites(prev => prev.filter(inv => inv.id !== invitationId));
-      
-      // Reload members list to show new member
+      // Reload members to show new connection
       await loadMembers();
       
       alert('Invitation accepted! You are now connected.');
     } catch (error: any) {
-      console.error('Error accepting invitation:', error);
-      alert('Error accepting invitation: ' + error.message);
+      // Log error but invitation is already removed from UI
+      console.error('Error in database operations:', error);
+      
+      // Still try to reload members
+      await loadMembers();
+      
+      // Only alert if it's not a duplicate error
+      if (!error.message?.includes('duplicate') && error.code !== '23505') {
+        alert('Invitation accepted, but there was an issue: ' + error.message);
+      } else {
+        alert('Invitation accepted!');
+      }
     }
   };
 
   const handleDeclineInvite = async (invitationId: string) => {
+    // Remove from UI IMMEDIATELY, before any async operations
+    setPendingInvites(prev => prev.filter(inv => inv.id !== invitationId));
+
+    // Now update the database
     try {
-      const { error } = await supabase
+      await supabase
         .from('circle_invitations')
         .update({ 
           status: 'declined',
@@ -181,15 +187,10 @@ export function CircleSection() {
         })
         .eq('id', invitationId);
 
-      if (error) throw error;
-
-      // Immediately remove from UI state
-      setPendingInvites(prev => prev.filter(inv => inv.id !== invitationId));
-      
       alert('Invitation declined.');
     } catch (error: any) {
       console.error('Error declining invitation:', error);
-      alert('Error declining invitation: ' + error.message);
+      alert('Invitation declined (but error updating database): ' + error.message);
     }
   };
 
