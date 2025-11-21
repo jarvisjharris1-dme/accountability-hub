@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+// Ensure these paths exist in your repo structure
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { CircleMemberCard } from '../circle/CircleMemberCard';
@@ -23,6 +24,12 @@ interface PendingInvite {
   message: string;
 }
 
+// Helper for safely extracting error messages
+const getErrorMessage = (error: unknown): string => {
+  if (error instanceof Error) return error.message;
+  return String(error);
+};
+
 export function CircleSection() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -38,6 +45,7 @@ export function CircleSection() {
       loadMembers();
       loadPendingInvitations();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   const loadMembers = async () => {
@@ -52,12 +60,19 @@ export function CircleSection() {
       if (error) {
         console.error('Error loading circle members:', error);
       } else if (data) {
-        const formattedMembers = data.map(item => ({
+        const formattedMembers = data.map((item: any) => ({
           id: item.id,
           member_id: item.member_id,
-          member_name: item.profiles?.full_name || 'Unknown',
-          member_avatar: item.profiles?.avatar,
-          streak_days: item.profiles?.streak_days || 0
+          // Handle case where profiles might be an array or object depending on Supabase generation
+          member_name: Array.isArray(item.profiles) 
+            ? item.profiles[0]?.full_name 
+            : item.profiles?.full_name || 'Unknown',
+          member_avatar: Array.isArray(item.profiles)
+            ? item.profiles[0]?.avatar
+            : item.profiles?.avatar,
+          streak_days: Array.isArray(item.profiles)
+            ? item.profiles[0]?.streak_days
+            : item.profiles?.streak_days || 0
         }));
         setMembers(formattedMembers);
       }
@@ -82,7 +97,7 @@ export function CircleSection() {
       if (error) {
         console.error('Error loading invitations:', error);
       } else if (data) {
-        setPendingInvites(data.map(inv => ({
+        setPendingInvites(data.map((inv: any) => ({
           id: inv.id,
           inviter_id: inv.inviter_id,
           sender_name: inv.inviter?.full_name || 'Someone',
@@ -114,21 +129,19 @@ export function CircleSection() {
       setInviteEmail('');
       setInviteMessage('');
       setShowInviteForm(false);
-    } catch (error: any) {
-      console.error('Error sending invitation:', error);
-      alert('Error sending invitation: ' + error.message);
+    } catch (error: unknown) {
+      const msg = getErrorMessage(error);
+      console.error('Error sending invitation:', msg);
+      alert('Error sending invitation: ' + msg);
     }
   };
 
   const handleAcceptInvite = async (invitationId: string, inviterId: string) => {
     if (!user?.id) return;
 
-    // Remove from UI IMMEDIATELY, before any async operations
     setPendingInvites(prev => prev.filter(inv => inv.id !== invitationId));
 
-    // Now do the database updates
     try {
-      // Update invitation status
       await supabase
         .from('circle_invitations')
         .update({ 
@@ -137,8 +150,6 @@ export function CircleSection() {
         })
         .eq('id', invitationId);
 
-      // Try to add bidirectional circle member relationships
-      // Ignore any errors (especially duplicates)
       await supabase
         .from('circle_members')
         .insert({
@@ -153,20 +164,20 @@ export function CircleSection() {
           member_id: user.id
         });
 
-      // Reload members to show new connection
       await loadMembers();
       
       alert('Invitation accepted! You are now connected.');
-    } catch (error: any) {
-      // Log error but invitation is already removed from UI
+    } catch (error: unknown) {
       console.error('Error in database operations:', error);
-      
-      // Still try to reload members
       await loadMembers();
       
-      // Only alert if it's not a duplicate error
-      if (!error.message?.includes('duplicate') && error.code !== '23505') {
-        alert('Invitation accepted, but there was an issue: ' + error.message);
+      const msg = getErrorMessage(error);
+      // Check for duplicate key error code explicitly
+      // '23505' is the Postgres code for unique_violation
+      const isDuplicate = msg.includes('duplicate') || (error as any)?.code === '23505';
+
+      if (!isDuplicate) {
+        alert('Invitation accepted, but there was an issue: ' + msg);
       } else {
         alert('Invitation accepted!');
       }
@@ -174,10 +185,8 @@ export function CircleSection() {
   };
 
   const handleDeclineInvite = async (invitationId: string) => {
-    // Remove from UI IMMEDIATELY, before any async operations
     setPendingInvites(prev => prev.filter(inv => inv.id !== invitationId));
 
-    // Now update the database
     try {
       await supabase
         .from('circle_invitations')
@@ -188,16 +197,15 @@ export function CircleSection() {
         .eq('id', invitationId);
 
       alert('Invitation declined.');
-    } catch (error: any) {
-      console.error('Error declining invitation:', error);
-      alert('Invitation declined (but error updating database): ' + error.message);
+    } catch (error: unknown) {
+      const msg = getErrorMessage(error);
+      console.error('Error declining invitation:', msg);
+      alert('Invitation declined (but error updating database): ' + msg);
     }
   };
 
   const handleMessage = (memberId: string) => {
-    // Store the member ID to auto-select in Messages
     sessionStorage.setItem('autoSelectMemberId', memberId);
-    // Navigate to home with messages tab
     navigate('/', { state: { tab: 'messages' } });
   };
 
