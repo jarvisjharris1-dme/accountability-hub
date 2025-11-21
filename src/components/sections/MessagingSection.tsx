@@ -26,19 +26,26 @@ export function MessagingSection() {
             .from('profiles')
             .select('id, full_name, avatar')
             .eq('id', autoSelectMemberId)
-            .single();
+            .maybeSingle(); // ✅ Changed from .single() to .maybeSingle()
 
-          if (error) throw error;
-
-          if (profile) {
-            // Auto-select this conversation
-            setSelectedConversation({
-              id: profile.id,
-              name: profile.full_name || 'Unknown User',
-              avatar: profile.avatar || undefined,
-              isGroup: false
-            });
+          if (error) {
+            console.error('Error fetching member details:', error);
+            return;
           }
+
+          // ✅ Check if profile exists
+          if (!profile) {
+            console.log('No profile found for member ID:', autoSelectMemberId);
+            return;
+          }
+
+          // Auto-select this conversation
+          setSelectedConversation({
+            id: profile.id,
+            name: profile.full_name || 'Unknown User',
+            avatar: profile.avatar || undefined,
+            isGroup: false
+          });
         } catch (error) {
           console.error('Error fetching member details:', error);
         } finally {
