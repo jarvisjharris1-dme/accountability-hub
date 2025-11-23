@@ -1,4 +1,4 @@
-import { Home, FileText, Users, MessageSquare, User } from 'lucide-react';
+import { Home, FileText, Users, MessageSquare, User, Settings } from 'lucide-react';
 
 interface BottomNavProps {
   activeTab: string;
@@ -12,7 +12,7 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
     { id: 'circle', label: 'Circle', icon: Users },
     { id: 'messages', label: 'Messages', icon: MessageSquare },
     { id: 'profile', label: 'Profile', icon: User },
-    // NO ADMIN TAB - removed
+    { id: 'admin', label: 'Admin', icon: Settings }, // Changed from Shield to Settings
   ];
 
   return (
@@ -45,22 +45,3 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
     </nav>
   );
 }
-```
-
-**Save, commit, push, and test.**
-
----
-
-## If That Doesn't Work
-
-The error is in one of your other components. Let's check:
-
-1. **Open browser DevTools** (F12)
-2. **Go to Console tab**
-3. **Look for the error** - it should show a file name and line number
-4. **Share the FULL error** including the file path
-
-Example:
-```
-TypeError: Cannot read properties of undefined (reading 'split')
-    at MessagingSection.tsx:42
