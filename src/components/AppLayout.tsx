@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { DashboardHero } from './sections/DashboardHero';
 import { DashboardStats } from './sections/DashboardStats';
 import { EmergencyButton } from './ui/EmergencyButton';
@@ -23,7 +23,6 @@ interface AppLayoutProps {
 
 const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const navigate = useNavigate();
-  const location = useLocation();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [showEmergencyModal, setShowEmergencyModal] = useState(false);
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -33,12 +32,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const { user: authUser } = useAuth();
 
   const handleTabChange = (tab: string) => {
-    // Skip admin tab for now while debugging
-    if (tab === 'admin') {
-      alert('Admin section temporarily disabled for debugging');
-      return;
-    }
-
     // External pages - navigate to their routes
     if (tab === 'analytics') {
       navigate('/analytics');
@@ -49,13 +42,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     } else if (tab === 'achievements') {
       navigate('/achievements');
     } else {
-      // Internal tabs
-      if (window.location.pathname !== '/') {
-        navigate('/');
-        setTimeout(() => setActiveTab(tab), 50);
-      } else {
-        setActiveTab(tab);
-      }
+      setActiveTab(tab);
     }
   };
 
@@ -65,12 +52,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     loadCircleSize();
     loadJournalCount();
   }, [authUser]);
-
-  useEffect(() => {
-    if (location.state?.tab) {
-      setActiveTab(location.state.tab);
-    }
-  }, [location]);
 
   const loadUserProfile = async () => {
     if (!authUser?.id) {
