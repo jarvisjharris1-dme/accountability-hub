@@ -1,4 +1,4 @@
-import { Home, FileText, Users, MessageSquare, User, Settings } from 'lucide-react';
+import { Home, FileText, Users, MessageSquare, User } from 'lucide-react';
 
 interface BottomNavProps {
   activeTab: string;
@@ -12,7 +12,6 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
     { id: 'circle', label: 'Circle', icon: Users },
     { id: 'messages', label: 'Messages', icon: MessageSquare },
     { id: 'profile', label: 'Profile', icon: User },
-    { id: 'admin', label: 'Admin', icon: Settings }, // Changed from Shield to Settings
   ];
 
   return (
