@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { DashboardHero } from './sections/DashboardHero';
@@ -11,7 +9,6 @@ import { CircleSection } from './sections/CircleSection';
 import { WorkshopSection } from './sections/WorkshopSection';
 import { ProfileSection } from './sections/ProfileSection';
 import { MessagingSection } from './sections/MessagingSection';
-import { AdminSection } from './sections/AdminSection';
 import NotificationSettings from './sections/NotificationSettings';
 import NotificationPermissionBanner from './ui/NotificationPermissionBanner';
 import { EmailVerificationBanner } from './ui/EmailVerificationBanner';
@@ -36,6 +33,12 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const { user: authUser } = useAuth();
 
   const handleTabChange = (tab: string) => {
+    // Skip admin tab for now while debugging
+    if (tab === 'admin') {
+      alert('Admin section temporarily disabled for debugging');
+      return;
+    }
+
     // External pages - navigate to their routes
     if (tab === 'analytics') {
       navigate('/analytics');
@@ -46,10 +49,9 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     } else if (tab === 'achievements') {
       navigate('/achievements');
     } else {
-      // Internal tabs - navigate back to home if on external page
+      // Internal tabs
       if (window.location.pathname !== '/') {
         navigate('/');
-        // Small delay to ensure navigation completes before setting tab
         setTimeout(() => setActiveTab(tab), 50);
       } else {
         setActiveTab(tab);
@@ -64,7 +66,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     loadJournalCount();
   }, [authUser]);
 
-  // Handle navigation state (e.g., from Circle to Messages)
   useEffect(() => {
     if (location.state?.tab) {
       setActiveTab(location.state.tab);
@@ -151,7 +152,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     );
   }
 
-  // If children are provided, render them with layout chrome
   if (children) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -172,7 +172,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     );
   }
 
-  // Otherwise render internal sections
   return (
     <div className="min-h-screen bg-gray-50">
       <EmailVerificationBanner />
@@ -181,7 +180,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       <div className="pb-20">
         {activeTab === 'dashboard' && (
           <>
-            <DashboardHero user={user} />
+            {user && <DashboardHero user={user} />}
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
               <DashboardStats 
                 circleSize={circleSize} 
@@ -218,12 +217,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         {activeTab === 'profile' && (
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             <ProfileSection />
-          </div>
-        )}
-
-        {activeTab === 'admin' && (
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <AdminSection />
           </div>
         )}
       </div>
