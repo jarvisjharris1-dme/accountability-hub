@@ -7,6 +7,7 @@ import { EmergencyModal } from './modals/EmergencyModal';
 import { JournalSection } from './sections/JournalSection';
 import { CircleSection } from './sections/CircleSection';
 import { WorkshopSection } from './sections/WorkshopSection';
+import { WorkshopViewer } from './sections/WorkshopViewer';
 import { ProfileSection } from './sections/ProfileSection';
 import { MessagingSection } from './sections/MessagingSection';
 import { AdminSection } from './sections/AdminSection';
@@ -202,6 +203,8 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         return <ProfileSection user={user} onUpdate={handleProfileUpdate} />;
        case 'admin':
         return <AdminSection />;
+        case 'workshop':
+  return <WorkshopViewer />;
       default:
         return null;
     }
