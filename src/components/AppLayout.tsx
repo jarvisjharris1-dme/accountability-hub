@@ -11,6 +11,8 @@ import { WorkshopViewer } from './sections/WorkshopViewer';
 import { ProfileSection } from './sections/ProfileSection';
 import { MessagingSection } from './sections/MessagingSection';
 import { AdminSection } from './sections/AdminSection';
+import { WorkshopViewer } from './sections/WorkshopViewer';
+import { GoalTracker } from './sections/GoalTracker';
 import NotificationSettings from './sections/NotificationSettings';
 import NotificationPermissionBanner from './ui/NotificationPermissionBanner';
 import { EmailVerificationBanner } from './ui/EmailVerificationBanner';
