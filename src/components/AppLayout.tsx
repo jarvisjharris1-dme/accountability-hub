@@ -9,6 +9,7 @@ import { CircleSection } from './sections/CircleSection';
 import { WorkshopSection } from './sections/WorkshopSection';
 import { ProfileSection } from './sections/ProfileSection';
 import { MessagingSection } from './sections/MessagingSection';
+import { AdminSection } from './sections/AdminSection';
 import NotificationSettings from './sections/NotificationSettings';
 import NotificationPermissionBanner from './ui/NotificationPermissionBanner';
 import { EmailVerificationBanner } from './ui/EmailVerificationBanner';
@@ -199,6 +200,8 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         return <NotificationSettings />;
       case 'profile':
         return <ProfileSection user={user} onUpdate={handleProfileUpdate} />;
+       case 'admin':
+        return <AdminSection />;
       default:
         return null;
     }
