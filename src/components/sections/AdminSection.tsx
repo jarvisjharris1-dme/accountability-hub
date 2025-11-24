@@ -1,11 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   Users, 
   MessageSquare, 
@@ -37,6 +32,7 @@ export function AdminSection() {
   const { user } = useAuth();
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('stats');
   const [stats, setStats] = useState<AppStats>({
     totalUsers: 0,
     activeUsers: 0,
@@ -258,117 +254,140 @@ export function AdminSection() {
         <p className="text-gray-300">Manage your Discovering Me platform</p>
       </div>
 
-      <Tabs defaultValue="stats" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="stats">Platform Stats</TabsTrigger>
-          <TabsTrigger value="workshops">Workshop Content</TabsTrigger>
-        </TabsList>
+      {/* Tabs */}
+      <div className="border-b border-gray-200">
+        <div className="flex gap-4">
+          <button
+            onClick={() => setActiveTab('stats')}
+            className={`px-4 py-2 font-medium border-b-2 transition-colors ${
+              activeTab === 'stats'
+                ? 'border-[#1a2332] text-[#1a2332]'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            Platform Stats
+          </button>
+          <button
+            onClick={() => setActiveTab('workshops')}
+            className={`px-4 py-2 font-medium border-b-2 transition-colors ${
+              activeTab === 'workshops'
+                ? 'border-[#1a2332] text-[#1a2332]'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            Workshop Content
+          </button>
+        </div>
+      </div>
 
-        {/* Stats Tab */}
-        <TabsContent value="stats" className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {/* Total Users */}
-            <Card className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600 mb-1">Total Users</p>
-                  <p className="text-3xl font-bold text-[#1a2332]">{stats.totalUsers}</p>
-                </div>
-                <Users className="w-12 h-12 text-blue-500" />
+      {/* Stats Tab */}
+      {activeTab === 'stats' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {/* Total Users */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600 mb-1">Total Users</p>
+                <p className="text-3xl font-bold text-[#1a2332]">{stats.totalUsers}</p>
               </div>
-            </Card>
-
-            {/* Active Users */}
-            <Card className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600 mb-1">Active Users (30 days)</p>
-                  <p className="text-3xl font-bold text-[#1a2332]">{stats.activeUsers}</p>
-                </div>
-                <TrendingUp className="w-12 h-12 text-green-500" />
-              </div>
-            </Card>
-
-            {/* New Users This Month */}
-            <Card className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600 mb-1">New This Month</p>
-                  <p className="text-3xl font-bold text-[#1a2332]">{stats.newUsersThisMonth}</p>
-                </div>
-                <Users className="w-12 h-12 text-purple-500" />
-              </div>
-            </Card>
-
-            {/* Total Messages */}
-            <Card className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600 mb-1">Total Messages</p>
-                  <p className="text-3xl font-bold text-[#1a2332]">{stats.totalMessages}</p>
-                </div>
-                <MessageSquare className="w-12 h-12 text-blue-500" />
-              </div>
-            </Card>
-
-            {/* Total Journals */}
-            <Card className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600 mb-1">Total Journals</p>
-                  <p className="text-3xl font-bold text-[#1a2332]">{stats.totalJournals}</p>
-                </div>
-                <FileText className="w-12 h-12 text-orange-500" />
-              </div>
-            </Card>
-
-            {/* Engagement Rate */}
-            <Card className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600 mb-1">Engagement Rate</p>
-                  <p className="text-3xl font-bold text-[#1a2332]">
-                    {stats.totalUsers > 0 
-                      ? Math.round((stats.activeUsers / stats.totalUsers) * 100) 
-                      : 0}%
-                  </p>
-                </div>
-                <TrendingUp className="w-12 h-12 text-green-500" />
-              </div>
-            </Card>
+              <Users className="w-12 h-12 text-blue-500" />
+            </div>
           </div>
-        </TabsContent>
 
-        {/* Workshop Content Tab */}
-        <TabsContent value="workshops" className="space-y-6">
+          {/* Active Users */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600 mb-1">Active Users (30 days)</p>
+                <p className="text-3xl font-bold text-[#1a2332]">{stats.activeUsers}</p>
+              </div>
+              <TrendingUp className="w-12 h-12 text-green-500" />
+            </div>
+          </div>
+
+          {/* New Users This Month */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600 mb-1">New This Month</p>
+                <p className="text-3xl font-bold text-[#1a2332]">{stats.newUsersThisMonth}</p>
+              </div>
+              <Users className="w-12 h-12 text-purple-500" />
+            </div>
+          </div>
+
+          {/* Total Messages */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600 mb-1">Total Messages</p>
+                <p className="text-3xl font-bold text-[#1a2332]">{stats.totalMessages}</p>
+              </div>
+              <MessageSquare className="w-12 h-12 text-blue-500" />
+            </div>
+          </div>
+
+          {/* Total Journals */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600 mb-1">Total Journals</p>
+                <p className="text-3xl font-bold text-[#1a2332]">{stats.totalJournals}</p>
+              </div>
+              <FileText className="w-12 h-12 text-orange-500" />
+            </div>
+          </div>
+
+          {/* Engagement Rate */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600 mb-1">Engagement Rate</p>
+                <p className="text-3xl font-bold text-[#1a2332]">
+                  {stats.totalUsers > 0 
+                    ? Math.round((stats.activeUsers / stats.totalUsers) * 100) 
+                    : 0}%
+                </p>
+              </div>
+              <TrendingUp className="w-12 h-12 text-green-500" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Workshop Content Tab */}
+      {activeTab === 'workshops' && (
+        <div className="space-y-6">
           <div className="flex justify-between items-center">
             <h2 className="text-2xl font-bold text-[#1a2332]">Workshop Content</h2>
-            <Button 
+            <button 
               onClick={() => {
                 setShowAddWorkshop(true);
                 setEditingWorkshop(null);
                 setWorkshopForm({ title: '', description: '', content: '', stage: 'awareness' });
               }}
-              className="bg-[#1a2332] hover:bg-[#2d3e50]"
+              className="bg-[#1a2332] text-white px-4 py-2 rounded-lg hover:bg-[#2d3e50] flex items-center gap-2"
             >
-              <Plus className="w-4 h-4 mr-2" />
+              <Plus className="w-4 h-4" />
               Add Workshop
-            </Button>
+            </button>
           </div>
 
           {/* Add/Edit Workshop Form */}
           {showAddWorkshop && (
-            <Card className="p-6">
+            <div className="bg-white rounded-lg shadow p-6">
               <h3 className="text-xl font-semibold mb-4">
                 {editingWorkshop ? 'Edit Workshop' : 'Add New Workshop'}
               </h3>
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium mb-1">Title</label>
-                  <Input
+                  <input
+                    type="text"
                     value={workshopForm.title}
                     onChange={(e) => setWorkshopForm({ ...workshopForm, title: e.target.value })}
                     placeholder="Workshop title"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1a2332]"
                   />
                 </div>
                 <div>
@@ -376,7 +395,7 @@ export function AdminSection() {
                   <select
                     value={workshopForm.stage}
                     onChange={(e) => setWorkshopForm({ ...workshopForm, stage: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-md"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1a2332]"
                   >
                     <option value="awareness">Awareness</option>
                     <option value="acceptance">Acceptance</option>
@@ -389,45 +408,50 @@ export function AdminSection() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">Description</label>
-                  <Textarea
+                  <textarea
                     value={workshopForm.description}
                     onChange={(e) => setWorkshopForm({ ...workshopForm, description: e.target.value })}
                     placeholder="Brief description"
                     rows={2}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1a2332]"
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">Content</label>
-                  <Textarea
+                  <textarea
                     value={workshopForm.content}
                     onChange={(e) => setWorkshopForm({ ...workshopForm, content: e.target.value })}
                     placeholder="Full workshop content (markdown supported)"
                     rows={10}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1a2332]"
                   />
                 </div>
                 <div className="flex gap-2">
-                  <Button onClick={handleSaveWorkshop} className="bg-[#1a2332] hover:bg-[#2d3e50]">
+                  <button 
+                    onClick={handleSaveWorkshop}
+                    className="bg-[#1a2332] text-white px-4 py-2 rounded-lg hover:bg-[#2d3e50]"
+                  >
                     {editingWorkshop ? 'Update' : 'Save'} Workshop
-                  </Button>
-                  <Button 
-                    variant="outline" 
+                  </button>
+                  <button 
                     onClick={() => {
                       setShowAddWorkshop(false);
                       setEditingWorkshop(null);
                       setWorkshopForm({ title: '', description: '', content: '', stage: 'awareness' });
                     }}
+                    className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300"
                   >
                     Cancel
-                  </Button>
+                  </button>
                 </div>
               </div>
-            </Card>
+            </div>
           )}
 
           {/* Workshop List */}
           <div className="grid gap-4">
             {workshops.map((workshop) => (
-              <Card key={workshop.id} className="p-6">
+              <div key={workshop.id} className="bg-white rounded-lg shadow p-6">
                 <div className="flex justify-between items-start">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">
@@ -442,28 +466,25 @@ export function AdminSection() {
                     </p>
                   </div>
                   <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
+                    <button
                       onClick={() => handleEditWorkshop(workshop)}
+                      className="p-2 text-gray-600 hover:bg-gray-100 rounded"
                     >
                       <Edit className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
+                    </button>
+                    <button
                       onClick={() => handleDeleteWorkshop(workshop.id)}
-                      className="text-red-600 hover:bg-red-50"
+                      className="p-2 text-red-600 hover:bg-red-50 rounded"
                     >
                       <Trash2 className="w-4 h-4" />
-                    </Button>
+                    </button>
                   </div>
                 </div>
-              </Card>
+              </div>
             ))}
           </div>
-        </TabsContent>
-      </Tabs>
+        </div>
+      )}
     </div>
   );
 }
