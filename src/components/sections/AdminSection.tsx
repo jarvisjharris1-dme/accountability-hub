@@ -8,7 +8,12 @@ import {
   TrendingUp,
   Plus,
   Edit,
-  Trash2
+  Trash2,
+  Upload,
+  Link as LinkIcon,
+  Video,
+  Music,
+  FileText as TextIcon
 } from 'lucide-react';
 
 interface AppStats {
@@ -25,6 +30,11 @@ interface WorkshopContent {
   description: string;
   content: string;
   stage: string;
+  content_type: 'text' | 'article' | 'video' | 'audio';
+  article_url?: string;
+  video_url?: string;
+  audio_url?: string;
+  media_file_path?: string;
   created_at: string;
 }
 
@@ -43,13 +53,18 @@ export function AdminSection() {
   const [workshops, setWorkshops] = useState<WorkshopContent[]>([]);
   const [editingWorkshop, setEditingWorkshop] = useState<WorkshopContent | null>(null);
   const [showAddWorkshop, setShowAddWorkshop] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   // Form state for workshop
   const [workshopForm, setWorkshopForm] = useState({
     title: '',
     description: '',
     content: '',
-    stage: 'awareness'
+    stage: 'awareness',
+    content_type: 'text' as 'text' | 'article' | 'video' | 'audio',
+    article_url: '',
+    video_url: '',
+    audio_url: ''
   });
 
   useEffect(() => {
@@ -88,12 +103,10 @@ export function AdminSection() {
 
   const loadStats = async () => {
     try {
-      // Get total users
       const { count: totalUsers } = await supabase
         .from('profiles')
         .select('*', { count: 'exact', head: true });
 
-      // Get active users (logged in within last 30 days)
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
       
@@ -102,7 +115,6 @@ export function AdminSection() {
         .select('*', { count: 'exact', head: true })
         .gte('updated_at', thirtyDaysAgo.toISOString());
 
-      // Get new users this month
       const firstDayOfMonth = new Date();
       firstDayOfMonth.setDate(1);
       firstDayOfMonth.setHours(0, 0, 0, 0);
@@ -112,12 +124,10 @@ export function AdminSection() {
         .select('*', { count: 'exact', head: true })
         .gte('created_at', firstDayOfMonth.toISOString());
 
-      // Get total messages
       const { count: totalMessages } = await supabase
         .from('messages')
         .select('*', { count: 'exact', head: true });
 
-      // Get total journals
       const { count: totalJournals } = await supabase
         .from('journal_entries')
         .select('*', { count: 'exact', head: true });
@@ -148,44 +158,118 @@ export function AdminSection() {
     }
   };
 
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    const fileType = workshopForm.content_type;
+    if (fileType === 'audio' && !file.type.startsWith('audio/')) {
+      alert('Please upload an audio file');
+      return;
+    }
+    if (fileType === 'video' && !file.type.startsWith('video/')) {
+      alert('Please upload a video file');
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random()}.${fileExt}`;
+      const filePath = `workshop-content/${fileType}/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('workshop-media')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('workshop-media')
+        .getPublicUrl(filePath);
+
+      // Update form with the URL
+      if (fileType === 'audio') {
+        setWorkshopForm({ ...workshopForm, audio_url: publicUrl });
+      } else if (fileType === 'video') {
+        setWorkshopForm({ ...workshopForm, video_url: publicUrl });
+      }
+
+      alert('File uploaded successfully!');
+    } catch (error: any) {
+      console.error('Error uploading file:', error);
+      alert('Error uploading file: ' + error.message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const handleSaveWorkshop = async () => {
     if (!workshopForm.title.trim()) {
       alert('Please enter a title');
       return;
     }
 
+    // Validate based on content type
+    if (workshopForm.content_type === 'text' && !workshopForm.content.trim()) {
+      alert('Please enter text content');
+      return;
+    }
+    if (workshopForm.content_type === 'article' && !workshopForm.article_url.trim()) {
+      alert('Please enter an article URL');
+      return;
+    }
+    if (workshopForm.content_type === 'video' && !workshopForm.video_url.trim()) {
+      alert('Please enter or upload a video');
+      return;
+    }
+    if (workshopForm.content_type === 'audio' && !workshopForm.audio_url.trim()) {
+      alert('Please enter or upload an audio file');
+      return;
+    }
+
     try {
+      const workshopData = {
+        title: workshopForm.title,
+        description: workshopForm.description,
+        content: workshopForm.content,
+        stage: workshopForm.stage,
+        content_type: workshopForm.content_type,
+        article_url: workshopForm.content_type === 'article' ? workshopForm.article_url : null,
+        video_url: workshopForm.content_type === 'video' ? workshopForm.video_url : null,
+        audio_url: workshopForm.content_type === 'audio' ? workshopForm.audio_url : null,
+      };
+
       if (editingWorkshop) {
-        // Update existing
         const { error } = await supabase
           .from('workshop_content')
-          .update({
-            title: workshopForm.title,
-            description: workshopForm.description,
-            content: workshopForm.content,
-            stage: workshopForm.stage
-          })
+          .update(workshopData)
           .eq('id', editingWorkshop.id);
 
         if (error) throw error;
         alert('Workshop updated successfully!');
       } else {
-        // Create new
         const { error } = await supabase
           .from('workshop_content')
-          .insert({
-            title: workshopForm.title,
-            description: workshopForm.description,
-            content: workshopForm.content,
-            stage: workshopForm.stage
-          });
+          .insert(workshopData);
 
         if (error) throw error;
         alert('Workshop added successfully!');
       }
 
       // Reset form
-      setWorkshopForm({ title: '', description: '', content: '', stage: 'awareness' });
+      setWorkshopForm({
+        title: '',
+        description: '',
+        content: '',
+        stage: 'awareness',
+        content_type: 'text',
+        article_url: '',
+        video_url: '',
+        audio_url: ''
+      });
       setEditingWorkshop(null);
       setShowAddWorkshop(false);
       loadWorkshops();
@@ -201,7 +285,11 @@ export function AdminSection() {
       title: workshop.title,
       description: workshop.description,
       content: workshop.content,
-      stage: workshop.stage
+      stage: workshop.stage,
+      content_type: workshop.content_type,
+      article_url: workshop.article_url || '',
+      video_url: workshop.video_url || '',
+      audio_url: workshop.audio_url || ''
     });
     setShowAddWorkshop(true);
   };
@@ -221,6 +309,16 @@ export function AdminSection() {
     } catch (error: any) {
       console.error('Error deleting workshop:', error);
       alert('Error deleting workshop: ' + error.message);
+    }
+  };
+
+  const getContentTypeIcon = (type: string) => {
+    switch (type) {
+      case 'text': return <TextIcon className="w-4 h-4" />;
+      case 'article': return <LinkIcon className="w-4 h-4" />;
+      case 'video': return <Video className="w-4 h-4" />;
+      case 'audio': return <Music className="w-4 h-4" />;
+      default: return <TextIcon className="w-4 h-4" />;
     }
   };
 
@@ -283,7 +381,6 @@ export function AdminSection() {
       {/* Stats Tab */}
       {activeTab === 'stats' && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {/* Total Users */}
           <div className="bg-white rounded-lg shadow p-6">
             <div className="flex items-center justify-between">
               <div>
@@ -294,7 +391,6 @@ export function AdminSection() {
             </div>
           </div>
 
-          {/* Active Users */}
           <div className="bg-white rounded-lg shadow p-6">
             <div className="flex items-center justify-between">
               <div>
@@ -305,7 +401,6 @@ export function AdminSection() {
             </div>
           </div>
 
-          {/* New Users This Month */}
           <div className="bg-white rounded-lg shadow p-6">
             <div className="flex items-center justify-between">
               <div>
@@ -316,7 +411,6 @@ export function AdminSection() {
             </div>
           </div>
 
-          {/* Total Messages */}
           <div className="bg-white rounded-lg shadow p-6">
             <div className="flex items-center justify-between">
               <div>
@@ -327,7 +421,6 @@ export function AdminSection() {
             </div>
           </div>
 
-          {/* Total Journals */}
           <div className="bg-white rounded-lg shadow p-6">
             <div className="flex items-center justify-between">
               <div>
@@ -338,7 +431,6 @@ export function AdminSection() {
             </div>
           </div>
 
-          {/* Engagement Rate */}
           <div className="bg-white rounded-lg shadow p-6">
             <div className="flex items-center justify-between">
               <div>
@@ -364,7 +456,16 @@ export function AdminSection() {
               onClick={() => {
                 setShowAddWorkshop(true);
                 setEditingWorkshop(null);
-                setWorkshopForm({ title: '', description: '', content: '', stage: 'awareness' });
+                setWorkshopForm({
+                  title: '',
+                  description: '',
+                  content: '',
+                  stage: 'awareness',
+                  content_type: 'text',
+                  article_url: '',
+                  video_url: '',
+                  audio_url: ''
+                });
               }}
               className="bg-[#1a2332] text-white px-4 py-2 rounded-lg hover:bg-[#2d3e50] flex items-center gap-2"
             >
@@ -390,6 +491,7 @@ export function AdminSection() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1a2332]"
                   />
                 </div>
+
                 <div>
                   <label className="block text-sm font-medium mb-1">Stage</label>
                   <select
@@ -406,6 +508,7 @@ export function AdminSection() {
                     <option value="abundance">Abundance</option>
                   </select>
                 </div>
+
                 <div>
                   <label className="block text-sm font-medium mb-1">Description</label>
                   <textarea
@@ -416,20 +519,151 @@ export function AdminSection() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1a2332]"
                   />
                 </div>
+
+                {/* Content Type Selector */}
                 <div>
-                  <label className="block text-sm font-medium mb-1">Content</label>
-                  <textarea
-                    value={workshopForm.content}
-                    onChange={(e) => setWorkshopForm({ ...workshopForm, content: e.target.value })}
-                    placeholder="Full workshop content (markdown supported)"
-                    rows={10}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1a2332]"
-                  />
+                  <label className="block text-sm font-medium mb-2">Content Type</label>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setWorkshopForm({ ...workshopForm, content_type: 'text' })}
+                      className={`flex flex-col items-center p-4 border-2 rounded-lg transition-colors ${
+                        workshopForm.content_type === 'text'
+                          ? 'border-[#1a2332] bg-blue-50'
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      <TextIcon className="w-6 h-6 mb-2" />
+                      <span className="text-sm font-medium">Text</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setWorkshopForm({ ...workshopForm, content_type: 'article' })}
+                      className={`flex flex-col items-center p-4 border-2 rounded-lg transition-colors ${
+                        workshopForm.content_type === 'article'
+                          ? 'border-[#1a2332] bg-blue-50'
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      <LinkIcon className="w-6 h-6 mb-2" />
+                      <span className="text-sm font-medium">Article</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setWorkshopForm({ ...workshopForm, content_type: 'video' })}
+                      className={`flex flex-col items-center p-4 border-2 rounded-lg transition-colors ${
+                        workshopForm.content_type === 'video'
+                          ? 'border-[#1a2332] bg-blue-50'
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      <Video className="w-6 h-6 mb-2" />
+                      <span className="text-sm font-medium">Video</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setWorkshopForm({ ...workshopForm, content_type: 'audio' })}
+                      className={`flex flex-col items-center p-4 border-2 rounded-lg transition-colors ${
+                        workshopForm.content_type === 'audio'
+                          ? 'border-[#1a2332] bg-blue-50'
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      <Music className="w-6 h-6 mb-2" />
+                      <span className="text-sm font-medium">Audio</span>
+                    </button>
+                  </div>
                 </div>
+
+                {/* Content Input based on type */}
+                {workshopForm.content_type === 'text' && (
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Text Content</label>
+                    <textarea
+                      value={workshopForm.content}
+                      onChange={(e) => setWorkshopForm({ ...workshopForm, content: e.target.value })}
+                      placeholder="Full workshop content (markdown supported)"
+                      rows={10}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1a2332]"
+                    />
+                  </div>
+                )}
+
+                {workshopForm.content_type === 'article' && (
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Article URL</label>
+                    <input
+                      type="url"
+                      value={workshopForm.article_url}
+                      onChange={(e) => setWorkshopForm({ ...workshopForm, article_url: e.target.value })}
+                      placeholder="https://example.com/article"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1a2332]"
+                    />
+                  </div>
+                )}
+
+                {workshopForm.content_type === 'video' && (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Video URL</label>
+                      <input
+                        type="url"
+                        value={workshopForm.video_url}
+                        onChange={(e) => setWorkshopForm({ ...workshopForm, video_url: e.target.value })}
+                        placeholder="YouTube, Vimeo, or direct video URL"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1a2332]"
+                      />
+                    </div>
+                    <div className="text-center text-gray-500">OR</div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Upload Video File</label>
+                      <input
+                        type="file"
+                        accept="video/*"
+                        onChange={handleFileUpload}
+                        disabled={uploading}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1a2332]"
+                      />
+                      {uploading && <p className="text-sm text-gray-500 mt-1">Uploading...</p>}
+                    </div>
+                  </div>
+                )}
+
+                {workshopForm.content_type === 'audio' && (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Audio URL</label>
+                      <input
+                        type="url"
+                        value={workshopForm.audio_url}
+                        onChange={(e) => setWorkshopForm({ ...workshopForm, audio_url: e.target.value })}
+                        placeholder="Direct audio file URL"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1a2332]"
+                      />
+                    </div>
+                    <div className="text-center text-gray-500">OR</div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Upload Audio File</label>
+                      <input
+                        type="file"
+                        accept="audio/*"
+                        onChange={handleFileUpload}
+                        disabled={uploading}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1a2332]"
+                      />
+                      {uploading && <p className="text-sm text-gray-500 mt-1">Uploading...</p>}
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex gap-2">
                   <button 
                     onClick={handleSaveWorkshop}
-                    className="bg-[#1a2332] text-white px-4 py-2 rounded-lg hover:bg-[#2d3e50]"
+                    disabled={uploading}
+                    className="bg-[#1a2332] text-white px-4 py-2 rounded-lg hover:bg-[#2d3e50] disabled:opacity-50"
                   >
                     {editingWorkshop ? 'Update' : 'Save'} Workshop
                   </button>
@@ -437,7 +671,16 @@ export function AdminSection() {
                     onClick={() => {
                       setShowAddWorkshop(false);
                       setEditingWorkshop(null);
-                      setWorkshopForm({ title: '', description: '', content: '', stage: 'awareness' });
+                      setWorkshopForm({
+                        title: '',
+                        description: '',
+                        content: '',
+                        stage: 'awareness',
+                        content_type: 'text',
+                        article_url: '',
+                        video_url: '',
+                        audio_url: ''
+                      });
                     }}
                     className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300"
                   >
@@ -456,7 +699,11 @@ export function AdminSection() {
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">
                       <h3 className="text-xl font-semibold">{workshop.title}</h3>
-                      <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded">
+                      <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded flex items-center gap-1">
+                        {getContentTypeIcon(workshop.content_type)}
+                        {workshop.content_type}
+                      </span>
+                      <span className="px-2 py-1 text-xs bg-purple-100 text-purple-800 rounded">
                         {workshop.stage}
                       </span>
                     </div>
