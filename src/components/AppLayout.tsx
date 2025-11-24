@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { DashboardHero } from './sections/DashboardHero';
 import { DashboardStats } from './sections/DashboardStats';
 import { EmergencyButton } from './ui/EmergencyButton';
@@ -23,6 +23,7 @@ interface AppLayoutProps {
 
 const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [showEmergencyModal, setShowEmergencyModal] = useState(false);
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -42,7 +43,14 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     } else if (tab === 'achievements') {
       navigate('/achievements');
     } else {
-      setActiveTab(tab);
+      // Internal tabs - navigate back to home if on external page
+      if (window.location.pathname !== '/') {
+        navigate('/');
+        // Small delay to ensure navigation completes before setting tab
+        setTimeout(() => setActiveTab(tab), 50);
+      } else {
+        setActiveTab(tab);
+      }
     }
   };
 
@@ -53,11 +61,53 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     loadJournalCount();
   }, [authUser]);
 
-  const loadUserProfile = async () => {
-    if (!authUser?.id) {
-      setIsLoading(false);
-      return;
+  // Handle navigation state (e.g., from Circle to Messages)
+  useEffect(() => {
+    if (location.state?.tab) {
+      setActiveTab(location.state.tab);
     }
+  }, [location]);
+
+  const updateCircleActivity = async () => {
+    if (!authUser) return;
+    try {
+      await supabase.rpc('update_circle_member_activity');
+    } catch (error) {
+      console.error('Error updating activity:', error);
+    }
+  };
+
+  const loadCircleSize = async () => {
+    if (!authUser) return;
+    try {
+      const { count } = await supabase
+        .from('circle_members')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', authUser.id);
+      setCircleSize(count || 0);
+    } catch (error) {
+      console.error('Error loading circle size:', error);
+    }
+  };
+
+  const loadJournalCount = async () => {
+    if (!authUser) return;
+    try {
+      const { count, error } = await supabase
+        .from('journal_entries')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', authUser.id);
+      
+      if (error) throw error;
+      setJournalCount(count || 0);
+    } catch (error) {
+      console.error('Error loading journal count:', error);
+      setJournalCount(0);
+    }
+  };
+
+  const loadUserProfile = async () => {
+    if (!authUser) return;
 
     try {
       const { data, error } = await supabase
@@ -67,147 +117,135 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         .single();
 
       if (error) throw error;
+
       if (data) {
-        setUser(data as UserProfile);
+        setUser({
+          id: data.id,
+          name: data.full_name || 'New User',
+          age: data.age || 0,
+          location: data.location || '',
+          city: data.city || '',
+          state: data.state || '',
+          zipcode: data.zipcode || '',
+          sex: data.sex || '',
+          ethnicity: data.ethnicity || '',
+          familyStatus: data.family_status || '',
+          accountabilityAreas: (data.accountability_areas || []) as AccountabilityArea[],
+          avatar: data.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + authUser.id,
+          streakDays: data.streak_days || 0,
+          joinedDate: data.joined_date || new Date().toISOString(),
+          phone_number: data.phone_number || '',
+          phone_verified: data.phone_verified || false
+        });
       }
     } catch (error) {
-      console.error('Error loading user profile:', error);
+      console.error('Error loading profile:', error);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const loadCircleSize = async () => {
-    if (!authUser?.id) return;
-
-    try {
-      const { count } = await supabase
-        .from('circle_members')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', authUser.id);
-
-      setCircleSize(count || 0);
-    } catch (error) {
-      console.error('Error loading circle size:', error);
-    }
+  const handleEmergencyTrigger = () => {
+    setShowEmergencyModal(true);
   };
 
-  const loadJournalCount = async () => {
-    if (!authUser?.id) return;
-
-    try {
-      const { count } = await supabase
-        .from('journal_entries')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', authUser.id);
-
-      setJournalCount(count || 0);
-    } catch (error) {
-      console.error('Error loading journal count:', error);
-    }
+  const handleEmergencyConfirm = (intervals: number[]) => {
+    alert(`Emergency support activated! Your circle has been notified. Check-ins scheduled at: ${intervals.join(', ')} minutes.`);
   };
 
-  const updateCircleActivity = async () => {
-    if (!authUser?.id) return;
-
-    try {
-      await supabase
-        .from('profiles')
-        .update({ 
-          updated_at: new Date().toISOString() 
-        })
-        .eq('id', authUser.id);
-    } catch (error) {
-      console.error('Error updating activity:', error);
-    }
+  const handleProfileUpdate = (updates: Partial<UserProfile>) => {
+    setUser(prev => prev ? { ...prev, ...updates } : null);
   };
 
-  if (isLoading) {
+  if (isLoading || !user) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#1a2332] mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
-        </div>
+        <p className="text-gray-500">Loading...</p>
       </div>
     );
   }
 
-  if (children) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <EmailVerificationBanner />
-        <NotificationPermissionBanner />
-        
-        <div className="pb-20">
-          {children}
-        </div>
+  const renderContent = () => {
+    // If children are provided, render them instead of internal routing
+    if (children) {
+      return children;
+    }
 
-        <EmergencyButton onClick={() => setShowEmergencyModal(true)} />
-        {showEmergencyModal && (
-          <EmergencyModal onClose={() => setShowEmergencyModal(false)} />
-        )}
-
-        <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <EmailVerificationBanner />
-      <NotificationPermissionBanner />
-      
-      <div className="pb-20">
-        {activeTab === 'dashboard' && (
+    // Otherwise use internal routing
+    switch (activeTab) {
+      case 'dashboard':
+        return (
           <>
-            {user && <DashboardHero user={user} />}
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-              <DashboardStats 
-                circleSize={circleSize} 
-                journalCount={journalCount}
-              />
+            <DashboardHero user={user} />
+            <DashboardStats 
+              streakDays={user.streakDays} 
+              journalEntries={journalCount} 
+              circleSize={circleSize} 
+            />
+            <div className="mb-8">
+              <EmergencyButton onTrigger={handleEmergencyTrigger} />
             </div>
           </>
-        )}
-        
-        {activeTab === 'journal' && (
-          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <JournalSection />
+        );
+      case 'journal':
+        return <JournalSection />;
+      case 'messages':
+        return <MessagingSection />;
+      case 'circle':
+        return <CircleSection />;
+      case 'workshop':
+        return <WorkshopSection />;
+      case 'notifications':
+        return <NotificationSettings />;
+      case 'profile':
+        return <ProfileSection user={user} onUpdate={handleProfileUpdate} />;
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50 pb-24">
+      {/* Header with Logo */}
+      <header className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+          <img 
+            src="https://d64gsuwffb70l.cloudfront.net/6906b08a650ee0590aaf4bb4_1762183406403_6827ce42.png" 
+            alt="Accountable" 
+            className="h-10 w-auto"
+          />
+          <div className="flex items-center gap-4">
+            {user && (
+              <div className="flex items-center gap-2">
+                <img 
+                  src={user.avatar} 
+                  alt={user.name} 
+                  className="h-8 w-8 rounded-full"
+                />
+                <span className="text-sm font-medium text-gray-700 hidden sm:block">
+                  {user.name}
+                </span>
+              </div>
+            )}
           </div>
+        </div>
+      </header>
+
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        <NotificationPermissionBanner />
+        {authUser && !authUser.email_confirmed_at && authUser.email && (
+          <EmailVerificationBanner email={authUser.email} />
         )}
-        
-        {activeTab === 'circle' && (
-          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <CircleSection />
-          </div>
-        )}
-        
-        {activeTab === 'workshop' && (
-          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <WorkshopSection />
-          </div>
-        )}
-        
-        {activeTab === 'messages' && (
-          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <MessagingSection />
-          </div>
-        )}
-        
-        {activeTab === 'profile' && (
-          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <ProfileSection />
-          </div>
-        )}
+        {renderContent()}
       </div>
 
-      <EmergencyButton onClick={() => setShowEmergencyModal(true)} />
-      {showEmergencyModal && (
-        <EmergencyModal onClose={() => setShowEmergencyModal(false)} />
-      )}
-
       <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
+
+      <EmergencyModal 
+        isOpen={showEmergencyModal}
+        onClose={() => setShowEmergencyModal(false)}
+        onConfirm={handleEmergencyConfirm}
+      />
     </div>
   );
 };
