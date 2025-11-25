@@ -190,8 +190,9 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         );
       case 'journal':
         return <JournalSection />;
-      case 'messages':
-        return <MessagingSection />;
+    // Messages removed - using Circle Chat Instead
+        // case 'messages':
+      //  return <MessagingSection />;
       case 'circle':
         return <CircleSection />;
       case 'workshop':
