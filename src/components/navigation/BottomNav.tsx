@@ -1,8 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import React from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAdmin } from '@/contexts/AdminContext';
-import { Badge } from '@/components/ui/badge';
 import NotificationBadge from '@/components/ui/NotificationBadge';
 
 
@@ -14,42 +12,6 @@ interface BottomNavProps {
 export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabChange }) => {
   const { user } = useAuth();
   const { isAdmin } = useAdmin();
-
-  const [unreadCount, setUnreadCount] = useState(0);
-
-  useEffect(() => {
-    if (!user) return;
-
-    loadUnreadCount();
-
-    const channel = supabase
-      .channel('unread-messages')
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'messages',
-        filter: `recipient_id=eq.${user.id}`,
-      }, () => {
-        loadUnreadCount();
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [user?.id]);
-
-  const loadUnreadCount = async () => {
-    if (!user) return;
-    
-    const { count } = await supabase
-      .from('messages')
-      .select('*', { count: 'exact', head: true })
-      .eq('recipient_id', user.id)
-      .eq('read', false);
-
-    setUnreadCount(count || 0);
-  };
 
   const tabs = [
     { 
@@ -68,23 +30,6 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabChange }) 
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
         </svg>
-      )
-    },
-    { 
-      id: 'messages', 
-      label: 'Messages',
-      badge: unreadCount,
-      icon: (
-        <div className="relative">
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-          </svg>
-          {unreadCount > 0 && (
-            <Badge variant="destructive" className="absolute -top-2 -right-2 h-5 w-5 flex items-center justify-center p-0 text-xs">
-              {unreadCount > 9 ? '9+' : unreadCount}
-            </Badge>
-          )}
-        </div>
       )
     },
     { 
@@ -123,7 +68,6 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabChange }) 
         </svg>
       )
     },
-
     { 
       id: 'achievements', 
       label: 'Badges',
@@ -133,7 +77,6 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabChange }) 
         </svg>
       )
     },
-
     { 
       id: 'notifications', 
       label: 'Settings',
@@ -146,8 +89,6 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabChange }) 
         </div>
       )
     },
-
-
    { 
       id: 'profile', 
       label: 'Profile',
@@ -167,7 +108,6 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabChange }) 
         </svg>
       )
     }
-
   ];
 
   return (
@@ -176,20 +116,3 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabChange }) 
         <div className="flex justify-around">
           {tabs.map(tab => (
             <button
-              key={tab.id}
-              onClick={() => onTabChange(tab.id)}
-              className={`flex flex-col items-center py-3 px-4 transition-colors ${
-                activeTab === tab.id
-                  ? 'text-[#d4a574]'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              {tab.icon}
-              <span className="text-xs mt-1 font-medium">{tab.label}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-    </nav>
-  );
-};
