@@ -44,16 +44,10 @@ export function CircleChat({ circleId, circleName }: CircleChatProps) {
     try {
       setLoading(true);
       
-      // Load messages with sender info
+      // Load messages first
       const { data: messagesData, error: messagesError } = await supabase
         .from('circle_chat_messages')
-        .select(`
-          *,
-          sender:profiles!circle_chat_messages_sender_id_fkey(
-            full_name,
-            avatar
-          )
-        `)
+        .select('*')
         .eq('circle_id', circleId)
         .is('deleted_at', null)
         .order('created_at', { ascending: true })
@@ -61,19 +55,38 @@ export function CircleChat({ circleId, circleName }: CircleChatProps) {
 
       if (messagesError) throw messagesError;
 
-      const formattedMessages = messagesData?.map(msg => ({
-        id: msg.id,
-        circle_id: msg.circle_id,
-        sender_id: msg.sender_id,
-        message: msg.message,
-        created_at: msg.created_at,
-        sender_name: msg.sender?.full_name || 'Unknown User',
-        sender_avatar: msg.sender?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${msg.sender_id}`
-      })) || [];
+      // Load sender info for all unique senders
+      if (messagesData && messagesData.length > 0) {
+        const senderIds = [...new Set(messagesData.map(m => m.sender_id))];
+        
+        const { data: profilesData, error: profilesError } = await supabase
+          .from('profiles')
+          .select('id, full_name, avatar')
+          .in('id', senderIds);
 
-      setMessages(formattedMessages);
+        if (profilesError) throw profilesError;
+
+        // Combine the data
+        const formattedMessages = messagesData.map(msg => {
+          const sender = profilesData?.find(p => p.id === msg.sender_id);
+          return {
+            id: msg.id,
+            circle_id: msg.circle_id,
+            sender_id: msg.sender_id,
+            message: msg.message,
+            created_at: msg.created_at,
+            sender_name: sender?.full_name || 'Unknown User',
+            sender_avatar: sender?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${msg.sender_id}`
+          };
+        });
+
+        setMessages(formattedMessages);
+      } else {
+        setMessages([]);
+      }
     } catch (error) {
       console.error('Error loading messages:', error);
+      setMessages([]);
     } finally {
       setLoading(false);
     }

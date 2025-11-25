@@ -77,8 +77,13 @@ export function CheckIns({ circleId, isOwner = false }: CheckInsProps) {
 
   useEffect(() => {
     loadCheckIns();
-    loadResponses();
   }, [circleId]);
+
+  useEffect(() => {
+    if (checkIns.length > 0) {
+      loadResponses();
+    }
+  }, [checkIns]);
 
   const loadCheckIns = async () => {
     try {
@@ -100,29 +105,48 @@ export function CheckIns({ circleId, isOwner = false }: CheckInsProps) {
   };
 
   const loadResponses = async () => {
-    if (!user?.id) return;
+    if (!user?.id || checkIns.length === 0) return;
 
     try {
-      const { data, error } = await supabase
+      const checkInIds = checkIns.map(c => c.id);
+      
+      // Load responses
+      const { data: responsesData, error: responsesError } = await supabase
         .from('check_in_responses')
-        .select(`
-          *,
-          user:profiles!check_in_responses_user_id_fkey(full_name)
-        `)
-        .in('check_in_id', checkIns.map(c => c.id))
+        .select('*')
+        .in('check_in_id', checkInIds)
         .order('created_at', { ascending: false })
         .limit(50);
 
-      if (error) throw error;
+      if (responsesError) throw responsesError;
 
-      const formattedResponses = data?.map(r => ({
-        ...r,
-        user_name: r.user?.full_name || 'Unknown User'
-      })) || [];
+      // Load user info for all responders
+      if (responsesData && responsesData.length > 0) {
+        const userIds = [...new Set(responsesData.map(r => r.user_id))];
+        
+        const { data: profilesData, error: profilesError } = await supabase
+          .from('profiles')
+          .select('id, full_name')
+          .in('id', userIds);
 
-      setResponses(formattedResponses);
+        if (profilesError) throw profilesError;
+
+        // Combine the data
+        const formattedResponses = responsesData.map(r => {
+          const profile = profilesData?.find(p => p.id === r.user_id);
+          return {
+            ...r,
+            user_name: profile?.full_name || 'Unknown User'
+          };
+        });
+
+        setResponses(formattedResponses);
+      } else {
+        setResponses([]);
+      }
     } catch (error) {
       console.error('Error loading responses:', error);
+      setResponses([]);
     }
   };
 

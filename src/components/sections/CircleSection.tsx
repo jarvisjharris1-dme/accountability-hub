@@ -33,37 +33,48 @@ export function CircleSection() {
     try {
       setLoading(true);
 
-      // Load circle members
+      // Load circle members with a simpler query
       const { data: membersData, error: membersError } = await supabase
         .from('circle_members')
-        .select(`
-          id,
-          member_id,
-          status,
-          joined_at,
-          member:profiles!circle_members_member_id_fkey(
-            full_name,
-            avatar
-          )
-        `)
+        .select('id, member_id, status, joined_at')
         .eq('user_id', user.id)
         .eq('status', 'active');
 
       if (membersError) throw membersError;
 
-      const formattedMembers = membersData?.map(m => ({
-        id: m.id,
-        member_id: m.member_id,
-        full_name: m.member?.full_name || 'Unknown User',
-        avatar: m.member?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${m.member_id}`,
-        status: m.status,
-        joined_at: m.joined_at
-      })) || [];
+      // Load profile info for each member
+      if (membersData && membersData.length > 0) {
+        const memberIds = membersData.map(m => m.member_id);
+        
+        const { data: profilesData, error: profilesError } = await supabase
+          .from('profiles')
+          .select('id, full_name, avatar')
+          .in('id', memberIds);
 
-      setMembers(formattedMembers);
+        if (profilesError) throw profilesError;
+
+        // Combine the data
+        const formattedMembers = membersData.map(m => {
+          const profile = profilesData?.find(p => p.id === m.member_id);
+          return {
+            id: m.id,
+            member_id: m.member_id,
+            full_name: profile?.full_name || 'Unknown User',
+            avatar: profile?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${m.member_id}`,
+            status: m.status,
+            joined_at: m.joined_at
+          };
+        });
+
+        setMembers(formattedMembers);
+      } else {
+        setMembers([]);
+      }
+
       setIsCircleOwner(true); // User owns their circle
     } catch (error) {
       console.error('Error loading circle members:', error);
+      setMembers([]);
     } finally {
       setLoading(false);
     }
