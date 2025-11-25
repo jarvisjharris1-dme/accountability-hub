@@ -10,6 +10,7 @@ export default function Goals() {
   const [activeTab] = useState('goals');
 
   const handleTabChange = (tab: string) => {
+    // External pages - navigate to their routes
     if (tab === 'analytics') {
       navigate('/analytics');
     } else if (tab === 'notifications') {
@@ -17,10 +18,10 @@ export default function Goals() {
     } else if (tab === 'achievements') {
       navigate('/achievements');
     } else if (tab === 'goals') {
-      // Already on goals, do nothing
+      // Already on goals page, do nothing
       return;
     } else {
-      // Navigate back to home for internal tabs
+      // Internal tabs - navigate back to home with state
       navigate('/', { state: { tab } });
     }
   };
@@ -36,20 +37,24 @@ export default function Goals() {
             className="h-10 w-auto cursor-pointer"
             onClick={() => navigate('/')}
           />
-          {user && (
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-gray-700 hidden sm:block">
-                {user.email}
-              </span>
-            </div>
-          )}
+          <div className="flex items-center gap-4">
+            {user && (
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-gray-700 hidden sm:block">
+                  {user.email}
+                </span>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
+      {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 py-8">
         <GoalTracker />
       </div>
 
+      {/* Bottom Navigation */}
       <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
     </div>
   );
