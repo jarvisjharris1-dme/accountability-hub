@@ -6,12 +6,10 @@ import { EmergencyButton } from './ui/EmergencyButton';
 import { EmergencyModal } from './modals/EmergencyModal';
 import { JournalSection } from './sections/JournalSection';
 import { CircleSection } from './sections/CircleSection';
-import { WorkshopSection } from './sections/WorkshopSection';
 import { WorkshopViewer } from './sections/WorkshopViewer';
 import { ProfileSection } from './sections/ProfileSection';
 import { MessagingSection } from './sections/MessagingSection';
 import { AdminSection } from './sections/AdminSection';
-import { WorkshopViewer } from './sections/WorkshopViewer';
 import { GoalTracker } from './sections/GoalTracker';
 import NotificationSettings from './sections/NotificationSettings';
 import NotificationPermissionBanner from './ui/NotificationPermissionBanner';
@@ -198,15 +196,13 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       case 'circle':
         return <CircleSection />;
       case 'workshop':
-        return <WorkshopSection />;
+        return <WorkshopViewer />;
       case 'notifications':
         return <NotificationSettings />;
       case 'profile':
         return <ProfileSection user={user} onUpdate={handleProfileUpdate} />;
        case 'admin':
         return <AdminSection />;
-        case 'workshop':
-  return <WorkshopViewer />;
       default:
         return null;
     }
