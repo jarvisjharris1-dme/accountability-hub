@@ -33,12 +33,11 @@ export function CircleSection() {
     try {
       setLoading(true);
 
-      // Load circle members with a simpler query
+      // Load circle members (simplified query without status filter)
       const { data: membersData, error: membersError } = await supabase
         .from('circle_members')
-        .select('id, member_id, status, joined_at')
-        .eq('user_id', user.id)
-        .eq('status', 'active');
+        .select('id, member_id, joined_at')
+        .eq('user_id', user.id);
 
       if (membersError) throw membersError;
 
@@ -61,8 +60,8 @@ export function CircleSection() {
             member_id: m.member_id,
             full_name: profile?.full_name || 'Unknown User',
             avatar: profile?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${m.member_id}`,
-            status: m.status,
-            joined_at: m.joined_at
+            status: 'active', // Default to active
+            joined_at: m.joined_at || new Date().toISOString()
           };
         });
 
@@ -120,7 +119,7 @@ export function CircleSection() {
         .insert({
           inviter_id: user.id,
           invitee_id: inviteeProfile.id,
-          status: 'pending'
+          invitee_email: inviteEmail.trim().toLowerCase()
         });
 
       if (inviteError) throw inviteError;
@@ -141,7 +140,7 @@ export function CircleSection() {
     try {
       const { error } = await supabase
         .from('circle_members')
-        .update({ status: 'removed' })
+        .delete()
         .eq('id', memberId);
 
       if (error) throw error;
