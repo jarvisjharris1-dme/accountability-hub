@@ -197,6 +197,8 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         return <CircleSection />;
       case 'workshop':
         return <WorkshopViewer />;
+      case 'goals':
+        return <GoalTracker />;
       case 'notifications':
         return <NotificationSettings />;
       case 'profile':
