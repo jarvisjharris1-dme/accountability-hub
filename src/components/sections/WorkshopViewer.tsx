@@ -101,13 +101,19 @@ export function WorkshopViewer() {
     try {
       const { error } = await supabase
         .from('user_workshop_progress')
-        .upsert({
-          user_id: user.id,
-          workshop_id: workshop.id,
-          status: 'in_progress',
-          started_at: new Date().toISOString(),
-          progress_percentage: 10
-        });
+        .upsert(
+          {
+            user_id: user.id,
+            workshop_id: workshop.id,
+            status: 'in_progress',
+            started_at: new Date().toISOString(),
+            progress_percentage: 10,
+            last_accessed_at: new Date().toISOString()
+          },
+          {
+            onConflict: 'user_id,workshop_id'
+          }
+        );
 
       if (error) throw error;
       setSelectedWorkshop(workshop);
@@ -124,13 +130,19 @@ export function WorkshopViewer() {
     try {
       const { error } = await supabase
         .from('user_workshop_progress')
-        .upsert({
-          user_id: user.id,
-          workshop_id: workshopId,
-          status: 'completed',
-          completed_at: new Date().toISOString(),
-          progress_percentage: 100
-        });
+        .upsert(
+          {
+            user_id: user.id,
+            workshop_id: workshopId,
+            status: 'completed',
+            completed_at: new Date().toISOString(),
+            progress_percentage: 100,
+            last_accessed_at: new Date().toISOString()
+          },
+          {
+            onConflict: 'user_id,workshop_id'
+          }
+        );
 
       if (error) throw error;
       alert('🎉 Workshop completed! Great work!');
