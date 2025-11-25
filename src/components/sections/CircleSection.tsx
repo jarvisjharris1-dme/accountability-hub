@@ -119,7 +119,7 @@ export function CircleSection() {
         .insert({
           inviter_id: user.id,
           invitee_id: inviteeProfile.id,
-          invitee_email: inviteEmail.trim().toLowerCase()
+          recipient_email: inviteEmail.trim().toLowerCase()
         });
 
       if (inviteError) throw inviteError;
