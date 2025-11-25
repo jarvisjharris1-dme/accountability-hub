@@ -38,8 +38,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     // External pages - navigate to their routes
     if (tab === 'analytics') {
       navigate('/analytics');
-    } else if (tab === 'goals') {
-      navigate('/goals');
+   
     } else if (tab === 'notifications') {
       navigate('/notifications');
     } else if (tab === 'achievements') {
