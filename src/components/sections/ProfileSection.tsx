@@ -21,7 +21,6 @@ import {
 
 interface Profile {
   id: string;
-  user_id: string;
   full_name: string;
   bio: string;
   avatar_url: string;
@@ -31,6 +30,11 @@ interface Profile {
   linkedin: string;
   website: string;
   visibility: 'public' | 'circle' | 'private';
+  gender: string;
+  marital_status: string;
+  date_of_birth: string;
+  zip_code: string;
+  ethnicity: string;
 }
 
 interface NotificationSettings {
@@ -51,7 +55,6 @@ export function ProfileSection() {
   // Profile state
   const [profile, setProfile] = useState<Profile>({
     id: '',
-    user_id: '',
     full_name: '',
     bio: '',
     avatar_url: '',
@@ -60,7 +63,12 @@ export function ProfileSection() {
     instagram: '',
     linkedin: '',
     website: '',
-    visibility: 'circle'
+    visibility: 'circle',
+    gender: '',
+    marital_status: '',
+    date_of_birth: '',
+    zip_code: '',
+    ethnicity: ''
   });
 
   // Notification settings state
@@ -95,12 +103,33 @@ export function ProfileSection() {
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
-        .eq('user_id', user.id)
-        .single();
+        .eq('id', user.id)
+        .maybeSingle(); // Use maybeSingle instead of single to handle no results
 
       if (error) throw error;
+      
       if (data) {
-        setProfile(data);
+        // Profile exists - load it
+        setProfile({
+          id: data.id,
+          full_name: data.full_name || '',
+          bio: data.bio || '',
+          avatar_url: data.avatar_url || '',
+          location: data.location || '',
+          interests: data.interests || [],
+          instagram: data.instagram || '',
+          linkedin: data.linkedin || '',
+          website: data.website || '',
+          visibility: data.visibility || 'circle',
+          gender: data.gender || '',
+          marital_status: data.marital_status || '',
+          date_of_birth: data.date_of_birth || '',
+          zip_code: data.zip_code || '',
+          ethnicity: data.ethnicity || ''
+        });
+      } else {
+        // Profile doesn't exist yet - keep default state
+        console.log('No profile found, using defaults');
       }
     } catch (error) {
       console.error('Error loading profile:', error);
@@ -146,9 +175,14 @@ export function ProfileSection() {
           linkedin: profile.linkedin,
           website: profile.website,
           visibility: profile.visibility,
+          gender: profile.gender,
+          marital_status: profile.marital_status,
+          date_of_birth: profile.date_of_birth || null,
+          zip_code: profile.zip_code,
+          ethnicity: profile.ethnicity,
           updated_at: new Date().toISOString()
         })
-        .eq('user_id', user.id);
+        .eq('id', user.id);
 
       if (error) throw error;
 
@@ -266,7 +300,7 @@ export function ProfileSection() {
       const { error: profileError } = await supabase
         .from('profiles')
         .delete()
-        .eq('user_id', user?.id);
+        .eq('id', user?.id);
 
       if (profileError) throw profileError;
 
@@ -345,6 +379,15 @@ export function ProfileSection() {
         {/* Profile Tab */}
         {activeTab === 'profile' && (
           <div className="p-6 space-y-6">
+            {profile.full_name && (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                <p className="text-sm text-green-800">
+                  <CheckCircle className="w-4 h-4 inline mr-2" />
+                  Viewing your current profile information
+                </p>
+              </div>
+            )}
+            
             <div>
               <label className="block text-sm font-medium mb-2">Full Name</label>
               <input
@@ -379,6 +422,101 @@ export function ProfileSection() {
                 placeholder="City, State/Country"
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1a2332]"
               />
+            </div>
+
+            {/* Demographics Section */}
+            <div className="border-t pt-6 mt-6">
+              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <User className="w-5 h-5" />
+                Demographics (Optional)
+              </h3>
+              <p className="text-sm text-gray-600 mb-4">
+                This information helps us better understand our community and personalize your experience.
+              </p>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2">Gender</label>
+                  <select
+                    value={profile.gender}
+                    onChange={(e) => setProfile({ ...profile, gender: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1a2332]"
+                  >
+                    <option value="">Prefer not to say</option>
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                    <option value="non-binary">Non-binary</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">Marital Status</label>
+                  <select
+                    value={profile.marital_status}
+                    onChange={(e) => setProfile({ ...profile, marital_status: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1a2332]"
+                  >
+                    <option value="">Prefer not to say</option>
+                    <option value="single">Single</option>
+                    <option value="married">Married</option>
+                    <option value="divorced">Divorced</option>
+                    <option value="widowed">Widowed</option>
+                    <option value="separated">Separated</option>
+                    <option value="partnered">Partnered</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">Date of Birth</label>
+                  <input
+                    type="date"
+                    value={profile.date_of_birth}
+                    onChange={(e) => setProfile({ ...profile, date_of_birth: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1a2332]"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Used to calculate age and provide age-appropriate content</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">Zip Code</label>
+                  <input
+                    type="text"
+                    value={profile.zip_code}
+                    onChange={(e) => setProfile({ ...profile, zip_code: e.target.value })}
+                    placeholder="12345"
+                    maxLength={10}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1a2332]"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Helps us connect you with local resources</p>
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium mb-2">Ethnicity</label>
+                  <select
+                    value={profile.ethnicity}
+                    onChange={(e) => setProfile({ ...profile, ethnicity: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1a2332]"
+                  >
+                    <option value="">Prefer not to say</option>
+                    <option value="african-american">African American/Black</option>
+                    <option value="asian">Asian</option>
+                    <option value="caucasian">Caucasian/White</option>
+                    <option value="hispanic-latino">Hispanic/Latino</option>
+                    <option value="middle-eastern">Middle Eastern</option>
+                    <option value="native-american">Native American</option>
+                    <option value="pacific-islander">Pacific Islander</option>
+                    <option value="mixed">Mixed/Multiracial</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+                <p className="text-sm text-blue-800">
+                  🔒 Your demographic information is private and will never be shared publicly. It's used only for platform analytics and personalization.
+                </p>
+              </div>
             </div>
 
             <div>
@@ -443,10 +581,14 @@ export function ProfileSection() {
                 onChange={(e) => setProfile({ ...profile, visibility: e.target.value as any })}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1a2332]"
               >
-                <option value="public">Public - Anyone can view</option>
                 <option value="circle">Circle Only - Only circle members can view</option>
                 <option value="private">Private - Only you can view</option>
               </select>
+              <p className="text-sm text-gray-500 mt-2">
+                {profile.visibility === 'circle' 
+                  ? '👥 Your circle members can see your profile' 
+                  : '🔒 Your profile is completely private'}
+              </p>
             </div>
 
             <button
