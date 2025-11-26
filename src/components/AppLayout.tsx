@@ -24,7 +24,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [showEmergencyModal, setShowEmergencyModal] = useState(false);
   const [user, setUser] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [circleSize, setCircleSize] = useState(0);
@@ -143,14 +142,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     }
   };
 
-  const handleEmergencyTrigger = () => {
-    setShowEmergencyModal(true);
-  };
-
-  const handleEmergencyConfirm = (intervals: number[]) => {
-    alert(`Emergency support activated! Your circle has been notified. Check-ins scheduled at: ${intervals.join(', ')} minutes.`);
-  };
-
   const handleProfileUpdate = (updates: Partial<UserProfile>) => {
     setUser(prev => prev ? { ...prev, ...updates } : null);
   };
@@ -172,27 +163,21 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     // Otherwise use internal routing
     switch (activeTab) {
       case 'dashboard':
-  return <DashboardSection />;
-case 'journal':
-  return <JournalSection />;
-    // Messages removed - using Circle Chat Instead
-        // case 'messages':
-      //  return <MessagingSection />;
+        return <DashboardSection onTabChange={handleTabChange} />;
+      case 'journal':
+        return <JournalSection />;
       case 'circle':
         return <CircleSection />;
       case 'workshop':
         return <WorkshopViewer />;
       case 'goals':
         return <GoalTracker />;
-        // Notifications removed - critical things added to profile section
-     // case 'notifications':
-        // return <NotificationSettings />;
       case 'profile':
         return <ProfileSection user={user} onUpdate={handleProfileUpdate} />;
-       case 'admin':
+      case 'admin':
         return <AdminSection />;
       default:
-        return null;
+        return <DashboardSection onTabChange={handleTabChange} />;
     }
   };
 
@@ -232,12 +217,6 @@ case 'journal':
       </div>
 
       <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
-
-      <EmergencyModal 
-        isOpen={showEmergencyModal}
-        onClose={() => setShowEmergencyModal(false)}
-        onConfirm={handleEmergencyConfirm}
-      />
     </div>
   );
 };
