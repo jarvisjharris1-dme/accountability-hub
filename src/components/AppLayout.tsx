@@ -176,23 +176,9 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     // Otherwise use internal routing
     switch (activeTab) {
       case 'dashboard':
-        return (
-          <>
-            <DashboardHero user={user} />
-            <DashboardStats 
-              streakDays={user.streakDays} 
-              journalEntries={journalCount} 
-              circleSize={circleSize} 
-            />
-            <div className="mb-8">
-              <EmergencyButton onTrigger={handleEmergencyTrigger} />
-            </div>
-          </>
-        );
-      case 'journal':
-        return <JournalSection />;
-        case 'dashboard':
   return <DashboardSection />;
+case 'journal':
+  return <JournalSection />;
     // Messages removed - using Circle Chat Instead
         // case 'messages':
       //  return <MessagingSection />;
