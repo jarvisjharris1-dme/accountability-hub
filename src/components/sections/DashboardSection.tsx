@@ -69,7 +69,11 @@ const STAGES = [
   { name: 'Abundance', color: 'yellow', progress: 0 }
 ];
 
-export function DashboardSection() {
+interface DashboardSectionProps {
+  onTabChange?: (tab: string) => void;
+}
+
+export function DashboardSection({ onTabChange }: DashboardSectionProps) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<DashboardStats>({
@@ -465,9 +469,6 @@ export function DashboardSection() {
               <Trophy className="w-6 h-6 text-yellow-600" />
               Recent Achievements
             </h3>
-            <button className="text-[#1a2332] hover:underline text-sm font-medium">
-              View All →
-            </button>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {recentBadges.map(badge => (
@@ -492,7 +493,10 @@ export function DashboardSection() {
               <Target className="w-6 h-6 text-green-600" />
               Active Goals
             </h3>
-            <button className="text-[#1a2332] hover:underline text-sm font-medium">
+            <button 
+              onClick={() => onTabChange?.('goals')}
+              className="text-[#1a2332] hover:underline text-sm font-medium"
+            >
               View All →
             </button>
           </div>
@@ -527,19 +531,31 @@ export function DashboardSection() {
           Quick Actions
         </h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <button className="flex flex-col items-center gap-2 p-4 border-2 border-gray-200 rounded-lg hover:border-[#1a2332] hover:bg-gray-50 transition-all">
+          <button 
+            onClick={() => onTabChange?.('journal')}
+            className="flex flex-col items-center gap-2 p-4 border-2 border-gray-200 rounded-lg hover:border-[#1a2332] hover:bg-gray-50 transition-all"
+          >
             <BookOpen className="w-8 h-8 text-blue-600" />
             <span className="text-sm font-medium">New Journal</span>
           </button>
-          <button className="flex flex-col items-center gap-2 p-4 border-2 border-gray-200 rounded-lg hover:border-[#1a2332] hover:bg-gray-50 transition-all">
+          <button 
+            onClick={() => onTabChange?.('goals')}
+            className="flex flex-col items-center gap-2 p-4 border-2 border-gray-200 rounded-lg hover:border-[#1a2332] hover:bg-gray-50 transition-all"
+          >
             <Target className="w-8 h-8 text-green-600" />
             <span className="text-sm font-medium">Add Goal</span>
           </button>
-          <button className="flex flex-col items-center gap-2 p-4 border-2 border-gray-200 rounded-lg hover:border-[#1a2332] hover:bg-gray-50 transition-all">
+          <button 
+            onClick={() => onTabChange?.('circle')}
+            className="flex flex-col items-center gap-2 p-4 border-2 border-gray-200 rounded-lg hover:border-[#1a2332] hover:bg-gray-50 transition-all"
+          >
             <MessageCircle className="w-8 h-8 text-purple-600" />
             <span className="text-sm font-medium">Circle Chat</span>
           </button>
-          <button className="flex flex-col items-center gap-2 p-4 border-2 border-gray-200 rounded-lg hover:border-[#1a2332] hover:bg-gray-50 transition-all">
+          <button 
+            onClick={() => onTabChange?.('workshop')}
+            className="flex flex-col items-center gap-2 p-4 border-2 border-gray-200 rounded-lg hover:border-[#1a2332] hover:bg-gray-50 transition-all"
+          >
             <Users className="w-8 h-8 text-orange-600" />
             <span className="text-sm font-medium">Workshop</span>
           </button>
