@@ -1,10 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { DashboardHero } from './sections/DashboardHero';
-import { DashboardStats } from './sections/DashboardStats';
 import { DashboardSection } from './sections/DashboardSection';
-import { EmergencyButton } from './ui/EmergencyButton';
-import { EmergencyModal } from './modals/EmergencyModal';
 import { JournalSection } from './sections/JournalSection';
 import { CircleSection } from './sections/CircleSection';
 import { WorkshopViewer } from './sections/WorkshopViewer';
