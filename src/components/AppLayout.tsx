@@ -15,6 +15,7 @@ import { BottomNav } from './navigation/BottomNav';
 import { UserProfile, AccountabilityArea } from '../types';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import { LifeBuoy } from 'lucide-react';
 
 interface AppLayoutProps {
   children?: React.ReactNode;
@@ -29,6 +30,11 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const [circleSize, setCircleSize] = useState(0);
   const [journalCount, setJournalCount] = useState(0);
   const { user: authUser } = useAuth();
+
+  // Support system state (global)
+  const [showSupportModal, setShowSupportModal] = useState(false);
+  const [supportType, setSupportType] = useState('');
+  const [supportMessage, setSupportMessage] = useState('');
 
   const handleTabChange = (tab: string) => {
     // External pages - navigate to their routes
@@ -146,6 +152,35 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     setUser(prev => prev ? { ...prev, ...updates } : null);
   };
 
+  const handleSupportSubmit = async () => {
+    if (!authUser || !supportType) {
+      alert('Please select a support type');
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('support_requests')
+        .insert({
+          user_id: authUser.id,
+          support_type: supportType,
+          message: supportMessage || null,
+          status: 'active'
+        });
+
+      if (error) throw error;
+
+      // Success
+      setShowSupportModal(false);
+      setSupportType('');
+      setSupportMessage('');
+      alert('✅ Support alert sent to your circle! 💪');
+    } catch (error) {
+      console.error('Error sending support request:', error);
+      alert('❌ Error sending support request. Please try again.');
+    }
+  };
+
   if (isLoading || !user) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -217,9 +252,94 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       </div>
 
       <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
+
+      {/* Global Support Button - Fixed Position (Shows on ALL pages) */}
+      <button
+        onClick={() => setShowSupportModal(true)}
+        className="fixed bottom-24 right-6 bg-red-600 text-white p-4 rounded-full shadow-lg hover:bg-red-700 transition-all hover:scale-110 z-40 flex items-center gap-2"
+      >
+        <LifeBuoy className="w-6 h-6" />
+        <span className="hidden sm:inline font-medium">Need Support?</span>
+      </button>
+
+      {/* Global Support Modal */}
+      {showSupportModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-lg w-full p-6">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="bg-red-600 rounded-full p-3">
+                <LifeBuoy className="w-8 h-8 text-white" />
+              </div>
+              <div>
+                <h3 className="text-2xl font-bold text-gray-900">Need Accountability Support?</h3>
+                <p className="text-gray-600">Your circle is here for you</p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  What do you need help with?
+                </label>
+                <select
+                  value={supportType}
+                  onChange={(e) => setSupportType(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+                >
+                  <option value="">Select a category...</option>
+                  <option value="goals">Struggling with goals</option>
+                  <option value="motivation">Need motivation</option>
+                  <option value="setback">Facing a setback</option>
+                  <option value="emotional">Emotional support</option>
+                  <option value="encouragement">Need encouragement</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Message (Optional)
+                </label>
+                <textarea
+                  value={supportMessage}
+                  onChange={(e) => setSupportMessage(e.target.value)}
+                  placeholder="Share what's on your mind..."
+                  rows={4}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+                />
+              </div>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <p className="text-sm text-blue-800">
+                  💡 Your circle members will be notified and can offer support and encouragement.
+                </p>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowSupportModal(false);
+                    setSupportType('');
+                    setSupportMessage('');
+                  }}
+                  className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSupportSubmit}
+                  disabled={!supportType}
+                  className="flex-1 px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Send Alert to Circle
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
 export default AppLayout;
-
