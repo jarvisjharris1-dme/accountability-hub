@@ -228,7 +228,10 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           />
           <div className="flex items-center gap-4">
             {user && (
-              <div className="flex items-center gap-2">
+              <button
+                onClick={() => handleTabChange('profile')}
+                className="flex items-center gap-2 hover:bg-gray-100 rounded-lg px-3 py-2 transition-colors"
+              >
                 <img 
                   src={user.avatar} 
                   alt={user.name} 
@@ -237,7 +240,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
                 <span className="text-sm font-medium text-gray-700 hidden sm:block">
                   {user.name}
                 </span>
-              </div>
+              </button>
             )}
           </div>
         </div>
@@ -343,3 +346,4 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
 };
 
 export default AppLayout;
+
