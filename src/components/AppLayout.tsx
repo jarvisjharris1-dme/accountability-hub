@@ -199,8 +199,9 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         return <WorkshopViewer />;
       case 'goals':
         return <GoalTracker />;
-      case 'notifications':
-        return <NotificationSettings />;
+        // Notifications removed - critical things added to profile section
+     // case 'notifications':
+        // return <NotificationSettings />;
       case 'profile':
         return <ProfileSection user={user} onUpdate={handleProfileUpdate} />;
        case 'admin':
