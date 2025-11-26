@@ -185,11 +185,11 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     <div className="min-h-screen bg-gray-50 pb-24">
       {/* Header with Logo */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
           <img 
             src="https://d64gsuwffb70l.cloudfront.net/6906b08a650ee0590aaf4bb4_1762183406403_6827ce42.png" 
             alt="Accountable" 
-            className="h-10 w-auto"
+            className="h-16 w-auto"
           />
           <div className="flex items-center gap-4">
             {user && (
@@ -197,7 +197,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
                 <img 
                   src={user.avatar} 
                   alt={user.name} 
-                  className="h-8 w-8 rounded-full"
+                  className="h-10 w-10 rounded-full border-2 border-gray-200"
                 />
                 <span className="text-sm font-medium text-gray-700 hidden sm:block">
                   {user.name}
@@ -222,3 +222,4 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
 };
 
 export default AppLayout;
+
