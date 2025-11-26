@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { DashboardHero } from './sections/DashboardHero';
 import { DashboardStats } from './sections/DashboardStats';
+import { DashboardSection } from './sections/DashboardSection';
 import { EmergencyButton } from './ui/EmergencyButton';
 import { EmergencyModal } from './modals/EmergencyModal';
 import { JournalSection } from './sections/JournalSection';
@@ -190,6 +191,8 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         );
       case 'journal':
         return <JournalSection />;
+        case 'dashboard':
+  return <DashboardSection />;
     // Messages removed - using Circle Chat Instead
         // case 'messages':
       //  return <MessagingSection />;
