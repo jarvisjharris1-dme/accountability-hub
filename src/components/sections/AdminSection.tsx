@@ -1,20 +1,27 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { 
-  Users, 
-  Trash2, 
-  Search, 
+import {
   Shield,
+  Users,
   UserCheck,
   UserX,
+  Crown,
+  Trash2,
+  Search,
   Mail,
   Calendar,
-  AlertTriangle,
   CheckCircle,
-  Crown
+  AlertTriangle,
+  Book,
+  Settings,
+  Plus,
+  Edit,
+  Eye,
+  BarChart3,
+  FileText,
+  Globe
 } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
 
 interface User {
   id: string;
@@ -22,410 +29,548 @@ interface User {
   full_name: string;
   created_at: string;
   last_sign_in_at: string;
-  email_confirmed_at: string;
+  is_admin: boolean;
 }
 
-interface AdminStats {
-  totalUsers: number;
-  activeUsers: number;
-  newThisWeek: number;
-  totalAdmins: number;
+interface Workshop {
+  id: string;
+  title: string;
+  description: string;
+  stage: string;
+  content: string;
+  video_url: string | null;
+  duration_minutes: number;
+  order_index: number;
+  is_published: boolean;
+  created_at: string;
 }
 
 export function AdminSection() {
-  const { user: currentUser } = useAuth();
-  const [users, setUsers] = useState<User[]>([]);
-  const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
+  const { user: authUser } = useAuth();
+  const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState<AdminStats>({
+  const [users, setUsers] = useState<User[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [stats, setStats] = useState({
     totalUsers: 0,
     activeUsers: 0,
     newThisWeek: 0,
     totalAdmins: 0
   });
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [admins, setAdmins] = useState<string[]>([]);
+
+  // Workshop Admin state
+  const [workshops, setWorkshops] = useState<Workshop[]>([]);
+  const [showWorkshopModal, setShowWorkshopModal] = useState(false);
+  const [editingWorkshop, setEditingWorkshop] = useState<Workshop | null>(null);
+  const [workshopForm, setWorkshopForm] = useState({
+    title: '',
+    description: '',
+    stage: 'Awareness',
+    content: '',
+    video_url: '',
+    duration_minutes: 30,
+    order_index: 0,
+    is_published: false
+  });
+
+  // Site Admin state
+  const [activeTab, setActiveTab] = useState<'users' | 'workshops' | 'site'>('users');
+  const [siteSettings, setSiteSettings] = useState({
+    site_name: 'Discovering Me',
+    support_email: 'support@discoveringme.app',
+    max_circle_size: 10,
+    enable_workshops: true,
+    enable_goals: true,
+    maintenance_mode: false
+  });
 
   useEffect(() => {
     checkAdminStatus();
-  }, [currentUser]);
+  }, [authUser]);
 
   useEffect(() => {
     if (isAdmin) {
       loadUsers();
-      loadAdmins();
       loadStats();
+      loadWorkshops();
+      loadSiteSettings();
     }
   }, [isAdmin]);
 
-  useEffect(() => {
-    filterUsers();
-  }, [searchTerm, users]);
-
   const checkAdminStatus = async () => {
-    if (!currentUser?.id) return;
+    if (!authUser) {
+      setLoading(false);
+      return;
+    }
 
     try {
       const { data, error } = await supabase
         .from('admin_users')
         .select('user_id')
-        .eq('user_id', currentUser.id)
+        .eq('user_id', authUser.id)
         .single();
 
-      if (!error && data) {
-        setIsAdmin(true);
-      } else {
-        setIsAdmin(false);
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error checking admin status:', error);
       }
+
+      setIsAdmin(!!data);
     } catch (error) {
       console.error('Error checking admin status:', error);
       setIsAdmin(false);
-    }
-  };
-
-  const loadUsers = async () => {
-    try {
-      setLoading(true);
-
-      // Get all profiles with user info
-      const { data: profiles, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (profileError) throw profileError;
-
-      // Get auth users info
-      const userList: User[] = profiles?.map(profile => ({
-        id: profile.id,
-        email: profile.email || 'No email',
-        full_name: profile.full_name || 'Unknown',
-        created_at: profile.created_at,
-        last_sign_in_at: profile.updated_at || profile.created_at,
-        email_confirmed_at: profile.created_at
-      })) || [];
-
-      setUsers(userList);
-      setFilteredUsers(userList);
-    } catch (error) {
-      console.error('Error loading users:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const loadAdmins = async () => {
+  const loadUsers = async () => {
     try {
-      const { data, error } = await supabase
+      const { data: profilesData, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, full_name, created_at')
+        .order('created_at', { ascending: false });
+
+      if (profilesError) throw profilesError;
+
+      const { data: authData } = await supabase.auth.admin.listUsers();
+
+      const { data: adminsData } = await supabase
         .from('admin_users')
         .select('user_id');
 
-      if (!error && data) {
-        setAdmins(data.map(a => a.user_id));
-      }
+      const adminIds = new Set(adminsData?.map(a => a.user_id) || []);
+
+      const combinedUsers: User[] = profilesData?.map(profile => {
+        const authUser = authData?.users.find(u => u.id === profile.id);
+        return {
+          id: profile.id,
+          email: authUser?.email || 'No email',
+          full_name: profile.full_name || 'No name',
+          created_at: profile.created_at,
+          last_sign_in_at: authUser?.last_sign_in_at || '',
+          is_admin: adminIds.has(profile.id)
+        };
+      }) || [];
+
+      setUsers(combinedUsers);
     } catch (error) {
-      console.error('Error loading admins:', error);
+      console.error('Error loading users:', error);
     }
   };
 
   const loadStats = async () => {
     try {
-      // Total users
-      const { count: totalCount } = await supabase
+      const { count: totalUsers } = await supabase
         .from('profiles')
         .select('*', { count: 'exact', head: true });
 
-      // Users from last 7 days
-      const weekAgo = new Date();
-      weekAgo.setDate(weekAgo.getDate() - 7);
-      const { count: newCount } = await supabase
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+      const { data: authData } = await supabase.auth.admin.listUsers();
+      const activeUsers = authData?.users.filter(u => 
+        u.last_sign_in_at && new Date(u.last_sign_in_at) > thirtyDaysAgo
+      ).length || 0;
+
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+      const { count: newThisWeek } = await supabase
         .from('profiles')
         .select('*', { count: 'exact', head: true })
-        .gte('created_at', weekAgo.toISOString());
+        .gte('created_at', sevenDaysAgo.toISOString());
 
-      // Active users (logged in last 30 days)
-      const monthAgo = new Date();
-      monthAgo.setDate(monthAgo.getDate() - 30);
-      const { count: activeCount } = await supabase
-        .from('profiles')
-        .select('*', { count: 'exact', head: true })
-        .gte('updated_at', monthAgo.toISOString());
-
-      // Total admins
-      const { count: adminCount } = await supabase
+      const { count: totalAdmins } = await supabase
         .from('admin_users')
         .select('*', { count: 'exact', head: true });
 
       setStats({
-        totalUsers: totalCount || 0,
-        activeUsers: activeCount || 0,
-        newThisWeek: newCount || 0,
-        totalAdmins: adminCount || 0
+        totalUsers: totalUsers || 0,
+        activeUsers,
+        newThisWeek: newThisWeek || 0,
+        totalAdmins: totalAdmins || 0
       });
     } catch (error) {
       console.error('Error loading stats:', error);
     }
   };
 
-  const filterUsers = () => {
-    if (!searchTerm.trim()) {
-      setFilteredUsers(users);
-      return;
-    }
+  const loadWorkshops = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('workshops')
+        .select('*')
+        .order('order_index', { ascending: true });
 
-    const filtered = users.filter(user =>
-      user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.full_name.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-    setFilteredUsers(filtered);
+      if (error) throw error;
+      setWorkshops(data || []);
+    } catch (error) {
+      console.error('Error loading workshops:', error);
+    }
   };
 
-  const handleDeleteUser = async (userId: string, userName: string) => {
-    // Prevent self-deletion
-    if (userId === currentUser?.id) {
-      alert('❌ You cannot delete your own account!');
+  const loadSiteSettings = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('site_settings')
+        .select('*')
+        .single();
+
+      if (error && error.code !== 'PGRST116') throw error;
+      
+      if (data) {
+        setSiteSettings(data);
+      }
+    } catch (error) {
+      console.error('Error loading site settings:', error);
+    }
+  };
+
+  const deleteUser = async (userId: string) => {
+    if (userId === authUser?.id) {
+      alert('You cannot delete yourself!');
       return;
     }
 
-    // Confirm deletion
     const confirmed = window.confirm(
-      `⚠️ Delete user "${userName}"?\n\nThis will permanently delete:\n• Profile\n• Journal entries\n• Goals\n• Circle memberships\n• All user data\n\nThis cannot be undone!`
+      'Are you sure you want to delete this user? This action cannot be undone and will delete all their data.'
     );
 
     if (!confirmed) return;
 
     try {
-      // Call secure RPC function
       const { data, error } = await supabase.rpc('admin_delete_user', {
         target_user_id: userId
       });
 
       if (error) throw error;
 
-      if (data && data.success) {
-        alert('✅ User deleted successfully!');
-        // Reload users
+      if (data?.success) {
+        alert('✅ User deleted successfully');
         loadUsers();
         loadStats();
       } else {
-        alert('❌ Error: ' + (data?.error || 'Unknown error'));
+        alert(`❌ Error: ${data?.error || 'Unknown error'}`);
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error deleting user:', error);
-      alert('❌ Error deleting user: ' + error.message);
+      alert('❌ Error deleting user. Check console for details.');
     }
   };
 
-  const toggleAdmin = async (userId: string, userName: string, isCurrentlyAdmin: boolean) => {
-    // Prevent removing own admin
-    if (userId === currentUser?.id && isCurrentlyAdmin) {
-      alert('❌ You cannot remove your own admin privileges!');
+  const toggleAdmin = async (userId: string, currentlyAdmin: boolean) => {
+    if (userId === authUser?.id) {
+      alert('You cannot change your own admin status!');
       return;
     }
 
-    const action = isCurrentlyAdmin ? 'remove admin from' : 'make admin';
-    const confirmed = window.confirm(`${action.toUpperCase()} "${userName}"?`);
-
-    if (!confirmed) return;
-
     try {
-      if (isCurrentlyAdmin) {
-        // Remove admin
+      if (currentlyAdmin) {
         const { error } = await supabase
           .from('admin_users')
           .delete()
           .eq('user_id', userId);
 
         if (error) throw error;
-        alert('✅ Admin privileges removed!');
+        alert('✅ Admin privileges removed');
       } else {
-        // Add admin
         const { error } = await supabase
           .from('admin_users')
           .insert({ user_id: userId });
 
         if (error) throw error;
-        alert('✅ User is now an admin!');
+        alert('✅ Admin privileges granted');
       }
 
-      loadAdmins();
-    } catch (error: any) {
+      loadUsers();
+      loadStats();
+    } catch (error) {
       console.error('Error toggling admin:', error);
-      alert('❌ Error: ' + error.message);
+      alert('❌ Error updating admin status');
     }
   };
 
-  if (!isAdmin) {
+  const saveWorkshop = async () => {
+    try {
+      if (editingWorkshop) {
+        const { error } = await supabase
+          .from('workshops')
+          .update(workshopForm)
+          .eq('id', editingWorkshop.id);
+
+        if (error) throw error;
+        alert('✅ Workshop updated successfully');
+      } else {
+        const { error } = await supabase
+          .from('workshops')
+          .insert(workshopForm);
+
+        if (error) throw error;
+        alert('✅ Workshop created successfully');
+      }
+
+      setShowWorkshopModal(false);
+      setEditingWorkshop(null);
+      setWorkshopForm({
+        title: '',
+        description: '',
+        stage: 'Awareness',
+        content: '',
+        video_url: '',
+        duration_minutes: 30,
+        order_index: 0,
+        is_published: false
+      });
+      loadWorkshops();
+    } catch (error) {
+      console.error('Error saving workshop:', error);
+      alert('❌ Error saving workshop');
+    }
+  };
+
+  const deleteWorkshop = async (workshopId: string) => {
+    if (!window.confirm('Are you sure you want to delete this workshop?')) return;
+
+    try {
+      const { error } = await supabase
+        .from('workshops')
+        .delete()
+        .eq('id', workshopId);
+
+      if (error) throw error;
+      alert('✅ Workshop deleted');
+      loadWorkshops();
+    } catch (error) {
+      console.error('Error deleting workshop:', error);
+      alert('❌ Error deleting workshop');
+    }
+  };
+
+  const saveSiteSettings = async () => {
+    try {
+      const { error } = await supabase
+        .from('site_settings')
+        .upsert(siteSettings);
+
+      if (error) throw error;
+      alert('✅ Site settings saved successfully');
+    } catch (error) {
+      console.error('Error saving site settings:', error);
+      alert('❌ Error saving site settings');
+    }
+  };
+
+  const filteredUsers = users.filter(user =>
+    user.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    user.email.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
-          <Shield className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h2>
-          <p className="text-gray-600">You do not have admin privileges.</p>
-        </div>
+      <div className="flex items-center justify-center min-h-screen">
+        <p className="text-gray-500">Loading...</p>
       </div>
     );
   }
 
-  if (loading) {
+  if (!isAdmin) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#1a2332] mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading admin panel...</p>
+      <div className="max-w-2xl mx-auto mt-20 text-center">
+        <div className="bg-red-50 border-2 border-red-200 rounded-xl p-8">
+          <Shield className="w-16 h-16 text-red-600 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-red-900 mb-2">Access Denied</h2>
+          <p className="text-red-700">
+            You do not have administrator privileges to access this section.
+          </p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-[#1a2332] to-[#2d3e50] rounded-xl p-6 text-white">
-        <div className="flex items-center gap-3 mb-2">
-          <Shield className="w-8 h-8" />
-          <h1 className="text-3xl font-bold">Admin Dashboard</h1>
+    <div className="max-w-7xl mx-auto">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        {/* Header */}
+        <div className="bg-gradient-to-r from-[#1a2332] to-[#2d3e50] p-6">
+          <h1 className="text-3xl font-bold text-white flex items-center gap-3">
+            <Shield className="w-8 h-8" />
+            Admin Dashboard
+          </h1>
+          <p className="text-gray-300 mt-2">Manage users, workshops, and site settings</p>
         </div>
-        <p className="text-gray-300">Manage users and platform settings</p>
-      </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-center gap-3">
-            <Users className="w-8 h-8 text-blue-600" />
-            <div>
-              <p className="text-2xl font-bold">{stats.totalUsers}</p>
-              <p className="text-sm text-gray-600">Total Users</p>
-            </div>
+        {/* Tabs */}
+        <div className="border-b border-gray-200">
+          <div className="flex gap-4 px-6">
+            <button
+              onClick={() => setActiveTab('users')}
+              className={`py-4 px-4 font-medium border-b-2 transition-colors ${
+                activeTab === 'users'
+                  ? 'border-[#1a2332] text-[#1a2332]'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <Users className="w-5 h-5 inline mr-2" />
+              User Management
+            </button>
+            <button
+              onClick={() => setActiveTab('workshops')}
+              className={`py-4 px-4 font-medium border-b-2 transition-colors ${
+                activeTab === 'workshops'
+                  ? 'border-[#1a2332] text-[#1a2332]'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <Book className="w-5 h-5 inline mr-2" />
+              Workshop Admin
+            </button>
+            <button
+              onClick={() => setActiveTab('site')}
+              className={`py-4 px-4 font-medium border-b-2 transition-colors ${
+                activeTab === 'site'
+                  ? 'border-[#1a2332] text-[#1a2332]'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <Settings className="w-5 h-5 inline mr-2" />
+              Site Admin
+            </button>
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-center gap-3">
-            <UserCheck className="w-8 h-8 text-green-600" />
-            <div>
-              <p className="text-2xl font-bold">{stats.activeUsers}</p>
-              <p className="text-sm text-gray-600">Active (30d)</p>
+        {/* User Management Tab */}
+        {activeTab === 'users' && (
+          <div className="p-6">
+            {/* Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-blue-600 font-medium">Total Users</p>
+                    <p className="text-2xl font-bold text-blue-900">{stats.totalUsers}</p>
+                  </div>
+                  <Users className="w-8 h-8 text-blue-500" />
+                </div>
+              </div>
+
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-green-600 font-medium">Active (30d)</p>
+                    <p className="text-2xl font-bold text-green-900">{stats.activeUsers}</p>
+                  </div>
+                  <UserCheck className="w-8 h-8 text-green-500" />
+                </div>
+              </div>
+
+              <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-purple-600 font-medium">New This Week</p>
+                    <p className="text-2xl font-bold text-purple-900">{stats.newThisWeek}</p>
+                  </div>
+                  <UserX className="w-8 h-8 text-purple-500" />
+                </div>
+              </div>
+
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-yellow-600 font-medium">Total Admins</p>
+                    <p className="text-2xl font-bold text-yellow-900">{stats.totalAdmins}</p>
+                  </div>
+                  <Crown className="w-8 h-8 text-yellow-500" />
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
 
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-center gap-3">
-            <UserX className="w-8 h-8 text-orange-600" />
-            <div>
-              <p className="text-2xl font-bold">{stats.newThisWeek}</p>
-              <p className="text-sm text-gray-600">New This Week</p>
+            {/* Warning Banner */}
+            <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6">
+              <div className="flex">
+                <AlertTriangle className="w-5 h-5 text-yellow-600 mr-3 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-yellow-800">
+                    Warning: Admin actions are permanent
+                  </p>
+                  <p className="text-sm text-yellow-700 mt-1">
+                    Deleting a user will remove all their data including journal entries, goals, and circle connections. This cannot be undone.
+                  </p>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
 
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-center gap-3">
-            <Crown className="w-8 h-8 text-yellow-600" />
-            <div>
-              <p className="text-2xl font-bold">{stats.totalAdmins}</p>
-              <p className="text-sm text-gray-600">Admins</p>
+            {/* Search */}
+            <div className="mb-6">
+              <div className="relative">
+                <Search className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search users by name or email..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1a2332]"
+                />
+              </div>
             </div>
-          </div>
-        </div>
-      </div>
 
-      {/* Search */}
-      <div className="bg-white rounded-xl shadow p-6">
-        <div className="flex items-center gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search by name or email..."
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1a2332]"
-            />
-          </div>
-          <button
-            onClick={loadUsers}
-            className="px-4 py-2 bg-[#1a2332] text-white rounded-lg hover:bg-[#2d3e50] font-medium"
-          >
-            Refresh
-          </button>
-        </div>
-      </div>
-
-      {/* Users List */}
-      <div className="bg-white rounded-xl shadow">
-        <div className="p-6 border-b">
-          <h2 className="text-xl font-bold">All Users ({filteredUsers.length})</h2>
-        </div>
-
-        <div className="divide-y">
-          {filteredUsers.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">
-              No users found
-            </div>
-          ) : (
-            filteredUsers.map(user => {
-              const userIsAdmin = admins.includes(user.id);
-              const isCurrentUser = user.id === currentUser?.id;
-
-              return (
-                <div key={user.id} className="p-6 hover:bg-gray-50 transition-colors">
-                  <div className="flex items-start justify-between">
+            {/* Users List */}
+            <div className="space-y-3">
+              {filteredUsers.map(user => (
+                <div
+                  key={user.id}
+                  className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors"
+                >
+                  <div className="flex items-center justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
-                        <h3 className="font-semibold text-lg">{user.full_name}</h3>
-                        {userIsAdmin && (
-                          <span className="bg-yellow-100 text-yellow-800 text-xs font-medium px-2.5 py-0.5 rounded flex items-center gap-1">
+                        <h3 className="font-semibold text-gray-900">{user.full_name}</h3>
+                        {user.is_admin && (
+                          <span className="bg-yellow-100 text-yellow-800 text-xs font-medium px-2.5 py-0.5 rounded-full flex items-center gap-1">
                             <Crown className="w-3 h-3" />
                             Admin
                           </span>
                         )}
-                        {isCurrentUser && (
-                          <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded">
+                        {user.id === authUser?.id && (
+                          <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
                             You
                           </span>
                         )}
                       </div>
-
-                      <div className="space-y-1 text-sm text-gray-600">
-                        <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-4 text-sm text-gray-600">
+                        <span className="flex items-center gap-1">
                           <Mail className="w-4 h-4" />
                           {user.email}
-                        </div>
-                        <div className="flex items-center gap-2">
+                        </span>
+                        <span className="flex items-center gap-1">
                           <Calendar className="w-4 h-4" />
-                          Joined {formatDistanceToNow(new Date(user.created_at), { addSuffix: true })}
-                        </div>
+                          Joined {new Date(user.created_at).toLocaleDateString()}
+                        </span>
                         {user.last_sign_in_at && (
-                          <div className="flex items-center gap-2">
+                          <span className="flex items-center gap-1">
                             <CheckCircle className="w-4 h-4" />
-                            Last active {formatDistanceToNow(new Date(user.last_sign_in_at), { addSuffix: true })}
-                          </div>
+                            Active {new Date(user.last_sign_in_at).toLocaleDateString()}
+                          </span>
                         )}
                       </div>
                     </div>
 
-                    <div className="flex gap-2">
+                    <div className="flex items-center gap-2">
                       <button
-                        onClick={() => toggleAdmin(user.id, user.full_name, userIsAdmin)}
-                        disabled={isCurrentUser && userIsAdmin}
-                        className={`px-3 py-2 rounded-lg font-medium text-sm flex items-center gap-2 ${
-                          userIsAdmin
-                            ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
-                            : 'bg-blue-100 text-blue-800 hover:bg-blue-200'
+                        onClick={() => toggleAdmin(user.id, user.is_admin)}
+                        disabled={user.id === authUser?.id}
+                        className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
+                          user.is_admin
+                            ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200'
+                            : 'bg-green-100 text-green-700 hover:bg-green-200'
                         } disabled:opacity-50 disabled:cursor-not-allowed`}
                       >
-                        <Crown className="w-4 h-4" />
-                        {userIsAdmin ? 'Remove Admin' : 'Make Admin'}
+                        {user.is_admin ? 'Remove Admin' : 'Make Admin'}
                       </button>
 
                       <button
-                        onClick={() => handleDeleteUser(user.id, user.full_name)}
-                        disabled={isCurrentUser}
-                        className="px-3 py-2 bg-red-100 text-red-800 rounded-lg hover:bg-red-200 font-medium text-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                        onClick={() => deleteUser(user.id)}
+                        disabled={user.id === authUser?.id}
+                        className="px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                       >
                         <Trash2 className="w-4 h-4" />
                         Delete
@@ -433,24 +578,303 @@ export function AdminSection() {
                     </div>
                   </div>
                 </div>
-              );
-            })
-          )}
-        </div>
+              ))}
+
+              {filteredUsers.length === 0 && (
+                <div className="text-center py-12 text-gray-500">
+                  No users found matching "{searchTerm}"
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Workshop Admin Tab */}
+        {activeTab === 'workshops' && (
+          <div className="p-6">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-gray-900">Workshop Management</h2>
+              <button
+                onClick={() => {
+                  setEditingWorkshop(null);
+                  setWorkshopForm({
+                    title: '',
+                    description: '',
+                    stage: 'Awareness',
+                    content: '',
+                    video_url: '',
+                    duration_minutes: 30,
+                    order_index: workshops.length,
+                    is_published: false
+                  });
+                  setShowWorkshopModal(true);
+                }}
+                className="bg-[#1a2332] text-white px-4 py-2 rounded-lg hover:bg-[#2d3e50] flex items-center gap-2"
+              >
+                <Plus className="w-5 h-5" />
+                Add Workshop
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {workshops.map(workshop => (
+                <div key={workshop.id} className="border border-gray-200 rounded-lg p-4">
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <h3 className="text-lg font-semibold">{workshop.title}</h3>
+                        <span className={`text-xs px-2 py-1 rounded-full ${
+                          workshop.is_published
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-gray-100 text-gray-800'
+                        }`}>
+                          {workshop.is_published ? 'Published' : 'Draft'}
+                        </span>
+                        <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-800">
+                          {workshop.stage}
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-600 mb-2">{workshop.description}</p>
+                      <div className="flex items-center gap-4 text-xs text-gray-500">
+                        <span>{workshop.duration_minutes} minutes</span>
+                        <span>Order: {workshop.order_index}</span>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => {
+                          setEditingWorkshop(workshop);
+                          setWorkshopForm({
+                            title: workshop.title,
+                            description: workshop.description,
+                            stage: workshop.stage,
+                            content: workshop.content,
+                            video_url: workshop.video_url || '',
+                            duration_minutes: workshop.duration_minutes,
+                            order_index: workshop.order_index,
+                            is_published: workshop.is_published
+                          });
+                          setShowWorkshopModal(true);
+                        }}
+                        className="p-2 text-blue-600 hover:bg-blue-50 rounded"
+                      >
+                        <Edit className="w-5 h-5" />
+                      </button>
+                      <button
+                        onClick={() => deleteWorkshop(workshop.id)}
+                        className="p-2 text-red-600 hover:bg-red-50 rounded"
+                      >
+                        <Trash2 className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Site Admin Tab */}
+        {activeTab === 'site' && (
+          <div className="p-6">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">Site Settings</h2>
+            
+            <div className="space-y-6 max-w-2xl">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Site Name
+                </label>
+                <input
+                  type="text"
+                  value={siteSettings.site_name}
+                  onChange={(e) => setSiteSettings({...siteSettings, site_name: e.target.value})}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1a2332]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Support Email
+                </label>
+                <input
+                  type="email"
+                  value={siteSettings.support_email}
+                  onChange={(e) => setSiteSettings({...siteSettings, support_email: e.target.value})}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1a2332]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Max Circle Size
+                </label>
+                <input
+                  type="number"
+                  value={siteSettings.max_circle_size}
+                  onChange={(e) => setSiteSettings({...siteSettings, max_circle_size: parseInt(e.target.value)})}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1a2332]"
+                />
+              </div>
+
+              <div className="space-y-3">
+                <label className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={siteSettings.enable_workshops}
+                    onChange={(e) => setSiteSettings({...siteSettings, enable_workshops: e.target.checked})}
+                    className="w-5 h-5 text-[#1a2332] rounded focus:ring-2 focus:ring-[#1a2332]"
+                  />
+                  <span className="text-sm font-medium text-gray-700">Enable Workshops</span>
+                </label>
+
+                <label className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={siteSettings.enable_goals}
+                    onChange={(e) => setSiteSettings({...siteSettings, enable_goals: e.target.checked})}
+                    className="w-5 h-5 text-[#1a2332] rounded focus:ring-2 focus:ring-[#1a2332]"
+                  />
+                  <span className="text-sm font-medium text-gray-700">Enable Goals</span>
+                </label>
+
+                <label className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={siteSettings.maintenance_mode}
+                    onChange={(e) => setSiteSettings({...siteSettings, maintenance_mode: e.target.checked})}
+                    className="w-5 h-5 text-[#1a2332] rounded focus:ring-2 focus:ring-[#1a2332]"
+                  />
+                  <span className="text-sm font-medium text-gray-700">Maintenance Mode</span>
+                </label>
+              </div>
+
+              <button
+                onClick={saveSiteSettings}
+                className="bg-[#1a2332] text-white px-6 py-3 rounded-lg hover:bg-[#2d3e50] font-semibold"
+              >
+                Save Settings
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Warning */}
-      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-        <div className="flex items-start gap-3">
-          <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-          <div className="text-sm">
-            <p className="font-semibold text-red-900 mb-1">⚠️ Admin Actions</p>
-            <p className="text-red-800">
-              User deletion is permanent and cannot be undone. All user data including journals, goals, and circle memberships will be deleted. Use with caution.
-            </p>
+      {/* Workshop Modal */}
+      {showWorkshopModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6">
+            <h3 className="text-2xl font-bold mb-6">
+              {editingWorkshop ? 'Edit Workshop' : 'Create Workshop'}
+            </h3>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">Title</label>
+                <input
+                  type="text"
+                  value={workshopForm.title}
+                  onChange={(e) => setWorkshopForm({...workshopForm, title: e.target.value})}
+                  className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1a2332]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Description</label>
+                <textarea
+                  value={workshopForm.description}
+                  onChange={(e) => setWorkshopForm({...workshopForm, description: e.target.value})}
+                  rows={3}
+                  className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1a2332]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Stage</label>
+                <select
+                  value={workshopForm.stage}
+                  onChange={(e) => setWorkshopForm({...workshopForm, stage: e.target.value})}
+                  className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1a2332]"
+                >
+                  <option value="Awareness">Awareness</option>
+                  <option value="Acceptance">Acceptance</option>
+                  <option value="Accountability">Accountability</option>
+                  <option value="Action">Action</option>
+                  <option value="Achievement">Achievement</option>
+                  <option value="Advocacy">Advocacy</option>
+                  <option value="Abundance">Abundance</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Content (Markdown)</label>
+                <textarea
+                  value={workshopForm.content}
+                  onChange={(e) => setWorkshopForm({...workshopForm, content: e.target.value})}
+                  rows={10}
+                  className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1a2332] font-mono text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Video URL (Optional)</label>
+                <input
+                  type="text"
+                  value={workshopForm.video_url}
+                  onChange={(e) => setWorkshopForm({...workshopForm, video_url: e.target.value})}
+                  className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1a2332]"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2">Duration (minutes)</label>
+                  <input
+                    type="number"
+                    value={workshopForm.duration_minutes}
+                    onChange={(e) => setWorkshopForm({...workshopForm, duration_minutes: parseInt(e.target.value)})}
+                    className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1a2332]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">Order Index</label>
+                  <input
+                    type="number"
+                    value={workshopForm.order_index}
+                    onChange={(e) => setWorkshopForm({...workshopForm, order_index: parseInt(e.target.value)})}
+                    className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1a2332]"
+                  />
+                </div>
+              </div>
+
+              <label className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  checked={workshopForm.is_published}
+                  onChange={(e) => setWorkshopForm({...workshopForm, is_published: e.target.checked})}
+                  className="w-5 h-5 text-[#1a2332] rounded"
+                />
+                <span className="text-sm font-medium">Published (visible to users)</span>
+              </label>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={() => setShowWorkshopModal(false)}
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={saveWorkshop}
+                  className="flex-1 px-4 py-2 bg-[#1a2332] text-white rounded-lg hover:bg-[#2d3e50]"
+                >
+                  {editingWorkshop ? 'Update' : 'Create'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
