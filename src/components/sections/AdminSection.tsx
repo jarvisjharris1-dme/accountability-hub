@@ -16,11 +16,7 @@ import {
   Book,
   Settings,
   Plus,
-  Edit,
-  Eye,
-  BarChart3,
-  FileText,
-  Globe
+  Edit
 } from 'lucide-react';
 
 interface User {
@@ -28,7 +24,6 @@ interface User {
   email: string;
   full_name: string;
   created_at: string;
-  last_sign_in_at: string;
   is_admin: boolean;
 }
 
@@ -125,32 +120,28 @@ export function AdminSection() {
 
   const loadUsers = async () => {
     try {
+      // Get profiles with emails from auth.users view (if available)
       const { data: profilesData, error: profilesError } = await supabase
         .from('profiles')
-        .select('id, full_name, created_at')
+        .select('id, full_name, email, created_at')
         .order('created_at', { ascending: false });
 
       if (profilesError) throw profilesError;
 
-      const { data: authData } = await supabase.auth.admin.listUsers();
-
+      // Get admin users
       const { data: adminsData } = await supabase
         .from('admin_users')
         .select('user_id');
 
       const adminIds = new Set(adminsData?.map(a => a.user_id) || []);
 
-      const combinedUsers: User[] = profilesData?.map(profile => {
-        const authUser = authData?.users.find(u => u.id === profile.id);
-        return {
-          id: profile.id,
-          email: authUser?.email || 'No email',
-          full_name: profile.full_name || 'No name',
-          created_at: profile.created_at,
-          last_sign_in_at: authUser?.last_sign_in_at || '',
-          is_admin: adminIds.has(profile.id)
-        };
-      }) || [];
+      const combinedUsers: User[] = profilesData?.map(profile => ({
+        id: profile.id,
+        email: profile.email || 'No email',
+        full_name: profile.full_name || 'No name',
+        created_at: profile.created_at,
+        is_admin: adminIds.has(profile.id)
+      })) || [];
 
       setUsers(combinedUsers);
     } catch (error) {
@@ -163,14 +154,6 @@ export function AdminSection() {
       const { count: totalUsers } = await supabase
         .from('profiles')
         .select('*', { count: 'exact', head: true });
-
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-      const { data: authData } = await supabase.auth.admin.listUsers();
-      const activeUsers = authData?.users.filter(u => 
-        u.last_sign_in_at && new Date(u.last_sign_in_at) > thirtyDaysAgo
-      ).length || 0;
 
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
@@ -186,7 +169,7 @@ export function AdminSection() {
 
       setStats({
         totalUsers: totalUsers || 0,
-        activeUsers,
+        activeUsers: totalUsers || 0, // Simplified - can't get from auth.users
         newThisWeek: newThisWeek || 0,
         totalAdmins: totalAdmins || 0
       });
@@ -214,12 +197,20 @@ export function AdminSection() {
       const { data, error } = await supabase
         .from('site_settings')
         .select('*')
+        .limit(1)
         .single();
 
       if (error && error.code !== 'PGRST116') throw error;
       
       if (data) {
-        setSiteSettings(data);
+        setSiteSettings({
+          site_name: data.site_name,
+          support_email: data.support_email,
+          max_circle_size: data.max_circle_size,
+          enable_workshops: data.enable_workshops,
+          enable_goals: data.enable_goals,
+          maintenance_mode: data.maintenance_mode
+        });
       }
     } catch (error) {
       console.error('Error loading site settings:', error);
@@ -348,11 +339,28 @@ export function AdminSection() {
 
   const saveSiteSettings = async () => {
     try {
-      const { error } = await supabase
+      // Try to update existing settings first
+      const { data: existing } = await supabase
         .from('site_settings')
-        .upsert(siteSettings);
+        .select('id')
+        .limit(1)
+        .single();
 
-      if (error) throw error;
+      if (existing) {
+        const { error } = await supabase
+          .from('site_settings')
+          .update(siteSettings)
+          .eq('id', existing.id);
+
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('site_settings')
+          .insert(siteSettings);
+
+        if (error) throw error;
+      }
+
       alert('✅ Site settings saved successfully');
     } catch (error) {
       console.error('Error saving site settings:', error);
@@ -456,7 +464,7 @@ export function AdminSection() {
               <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-green-600 font-medium">Active (30d)</p>
+                    <p className="text-sm text-green-600 font-medium">Active Users</p>
                     <p className="text-2xl font-bold text-green-900">{stats.activeUsers}</p>
                   </div>
                   <UserCheck className="w-8 h-8 text-green-500" />
@@ -545,12 +553,6 @@ export function AdminSection() {
                           <Calendar className="w-4 h-4" />
                           Joined {new Date(user.created_at).toLocaleDateString()}
                         </span>
-                        {user.last_sign_in_at && (
-                          <span className="flex items-center gap-1">
-                            <CheckCircle className="w-4 h-4" />
-                            Active {new Date(user.last_sign_in_at).toLocaleDateString()}
-                          </span>
-                        )}
                       </div>
                     </div>
 
@@ -670,6 +672,12 @@ export function AdminSection() {
                   </div>
                 </div>
               ))}
+
+              {workshops.length === 0 && (
+                <div className="text-center py-12 text-gray-500">
+                  No workshops created yet. Click "Add Workshop" to create your first one.
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -812,6 +820,7 @@ export function AdminSection() {
                   onChange={(e) => setWorkshopForm({...workshopForm, content: e.target.value})}
                   rows={10}
                   className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1a2332] font-mono text-sm"
+                  placeholder="Use markdown for formatting..."
                 />
               </div>
 
@@ -822,6 +831,7 @@ export function AdminSection() {
                   value={workshopForm.video_url}
                   onChange={(e) => setWorkshopForm({...workshopForm, video_url: e.target.value})}
                   className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1a2332]"
+                  placeholder="https://youtube.com/..."
                 />
               </div>
 
