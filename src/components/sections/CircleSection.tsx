@@ -93,9 +93,15 @@ export function CircleSection() {
         .from('profiles')
         .select('id, email')
         .eq('email', inviteEmail.trim().toLowerCase())
-        .single();
+        .maybeSingle(); // ✅ FIXED: Changed from .single() to .maybeSingle()
 
-      if (profileError || !inviteeProfile) {
+      if (profileError) {
+        console.error('Profile lookup error:', profileError);
+        alert('Error looking up user: ' + profileError.message);
+        return;
+      }
+
+      if (!inviteeProfile) {
         alert('User not found. Please make sure they have an account.');
         return;
       }
@@ -106,7 +112,7 @@ export function CircleSection() {
         .select('id')
         .eq('user_id', user.id)
         .eq('member_id', inviteeProfile.id)
-        .single();
+        .maybeSingle(); // ✅ FIXED: Changed from .single() to .maybeSingle()
 
       if (existing) {
         alert('This user is already in your circle');
