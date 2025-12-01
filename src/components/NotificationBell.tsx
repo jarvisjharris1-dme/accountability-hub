@@ -116,8 +116,28 @@ export function NotificationBell() {
   const handleNotificationClick = (notification: Notification) => {
     markAsRead(notification.id);
     setShowDropdown(false);
+    
     if (notification.link) {
-      navigate(notification.link);
+      // ✅ Map internal links to tab state navigation
+      const internalTabs: { [key: string]: string } = {
+        '/circle': 'circle',
+        '/dashboard': 'dashboard',
+        '/workshop': 'workshop',
+        '/goals': 'goals',
+        '/journal': 'journal',
+        '/profile': 'profile',
+        '/admin': 'admin'
+      };
+
+      const tabName = internalTabs[notification.link];
+      
+      if (tabName) {
+        // Internal tab - navigate to home with tab state
+        navigate('/', { state: { tab: tabName } });
+      } else {
+        // External route - navigate directly
+        navigate(notification.link);
+      }
     }
   };
 
@@ -127,6 +147,7 @@ export function NotificationBell() {
       <button
         onClick={() => setShowDropdown(!showDropdown)}
         className="relative p-2 rounded-lg hover:bg-gray-100 transition-colors"
+        aria-label="Notifications"
       >
         <Bell className="w-6 h-6 text-gray-700" />
         {unreadCount > 0 && (
