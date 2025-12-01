@@ -1,6 +1,6 @@
 {
-  "name": "Accountable Me - Personal Accountability Platform",
-  "short_name": "Accountable Me",
+  "name": "Accountable - Your Personal Accountability Platform",
+  "short_name": "Accountable",
   "description": "Personal accountability platform built for personal growth and development",
   "start_url": "/",
   "display": "standalone",
