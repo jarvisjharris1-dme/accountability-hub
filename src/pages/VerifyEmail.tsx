@@ -1,113 +1,88 @@
-import { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { supabase } from '@/lib/supabase';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useNavigate } from 'react-router-dom';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { CheckCircle, XCircle, Loader2, Mail } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { CheckCircle, Mail, ArrowRight } from 'lucide-react';
 
 export default function VerifyEmail() {
-  const [searchParams] = useSearchParams();
-  const [status, setStatus] = useState<'verifying' | 'success' | 'error' | 'resend'>('verifying');
-  const [message, setMessage] = useState('');
-  const [email, setEmail] = useState('');
-  const [isResending, setIsResending] = useState(false);
   const navigate = useNavigate();
-  const { toast } = useToast();
-
-  useEffect(() => {
-    const verifyEmail = async () => {
-      const token_hash = searchParams.get('token_hash');
-      const type = searchParams.get('type');
-
-      if (token_hash && type === 'email') {
-        try {
-          const { data, error } = await supabase.auth.verifyOtp({
-            token_hash,
-            type: 'email',
-          });
-
-          if (error) throw error;
-
-          if (data.user) {
-            setStatus('success');
-            setMessage('Your email has been verified successfully!');
-            setTimeout(() => navigate('/'), 2000);
-          }
-        } catch (error: any) {
-          setStatus('error');
-          setMessage(error.message || 'Verification failed. The link may have expired.');
-        }
-      } else {
-        setStatus('resend');
-        setMessage('No verification token found. Please enter your email to resend.');
-      }
-    };
-
-    verifyEmail();
-  }, [searchParams, navigate]);
-
-  const handleResend = async () => {
-    if (!email) {
-      toast({ title: 'Error', description: 'Please enter your email', variant: 'destructive' });
-      return;
-    }
-
-    setIsResending(true);
-    try {
-      const { error } = await supabase.auth.resend({ type: 'signup', email });
-      if (error) throw error;
-      toast({ title: 'Success!', description: 'Verification email sent. Check your inbox.' });
-      setStatus('verifying');
-    } catch (error: any) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    } finally {
-      setIsResending(false);
-    }
-  };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50 p-4">
       <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle className="text-2xl flex items-center gap-2">
-            {status === 'verifying' && <Loader2 className="h-6 w-6 animate-spin" />}
-            {status === 'success' && <CheckCircle className="h-6 w-6 text-green-600" />}
-            {status === 'error' && <XCircle className="h-6 w-6 text-red-600" />}
-            {status === 'resend' && <Mail className="h-6 w-6 text-blue-600" />}
-            {status === 'verifying' ? 'Verifying Email...' : 
-             status === 'success' ? 'Email Verified!' : 
-             status === 'error' ? 'Verification Failed' : 'Resend Verification'}
-          </CardTitle>
-          <CardDescription>{message}</CardDescription>
+        <CardHeader className="text-center space-y-4">
+          <div className="flex justify-center">
+            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
+              <CheckCircle className="w-10 h-10 text-green-600" />
+            </div>
+          </div>
+          <CardTitle className="text-2xl font-bold">Check Your Email!</CardTitle>
+          <CardDescription>
+            We've sent you a verification link to confirm your account
+          </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          {status === 'success' && (
-            <Button onClick={() => navigate('/')} className="w-full">Continue to Dashboard</Button>
-          )}
-          {status === 'error' && (
-            <div className="space-y-2">
-              <Button onClick={() => navigate('/login')} className="w-full">Back to Login</Button>
-              <Button onClick={() => setStatus('resend')} variant="outline" className="w-full">
-                Resend Verification Email
-              </Button>
+
+        <CardContent className="space-y-6">
+          {/* Email Icon */}
+          <div className="flex justify-center">
+            <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center">
+              <Mail className="w-10 h-10 text-blue-600" />
             </div>
-          )}
-          {status === 'resend' && (
-            <div className="space-y-2">
-              <input
-                type="email"
-                placeholder="Enter your email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-3 py-2 border rounded-md"
-              />
-              <Button onClick={handleResend} disabled={isResending} className="w-full">
-                {isResending ? 'Sending...' : 'Resend Verification Email'}
-              </Button>
-            </div>
-          )}
+          </div>
+
+          {/* Instructions */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <h3 className="font-semibold text-blue-900 mb-3 text-sm">Next Steps:</h3>
+            <ol className="space-y-2 text-sm text-blue-800">
+              <li className="flex items-start">
+                <span className="font-semibold mr-2">1.</span>
+                <span>Check your inbox (and spam folder)</span>
+              </li>
+              <li className="flex items-start">
+                <span className="font-semibold mr-2">2.</span>
+                <span>Click the verification link in the email</span>
+              </li>
+              <li className="flex items-start">
+                <span className="font-semibold mr-2">3.</span>
+                <span>You'll be redirected to sign in</span>
+              </li>
+              <li className="flex items-start">
+                <span className="font-semibold mr-2">4.</span>
+                <span>Start your journey! 🚀</span>
+              </li>
+            </ol>
+          </div>
+
+          {/* Tips */}
+          <div className="bg-gray-50 rounded-lg p-4 text-sm text-gray-600">
+            <p className="font-semibold mb-2">💡 Tips:</p>
+            <ul className="space-y-1 text-xs">
+              <li>• Check your spam/junk folder if you don't see the email</li>
+              <li>• The verification link expires in 24 hours</li>
+              <li>• Make sure to use the same browser when clicking the link</li>
+            </ul>
+          </div>
         </CardContent>
+
+        <CardFooter className="flex flex-col space-y-3">
+          <Button
+            onClick={() => navigate('/login')}
+            className="w-full"
+            variant="outline"
+          >
+            Go to Sign In
+            <ArrowRight className="ml-2 h-4 w-4" />
+          </Button>
+
+          <p className="text-xs text-center text-gray-500">
+            Didn't receive the email?{' '}
+            <button
+              onClick={() => navigate('/signup')}
+              className="text-blue-600 hover:underline font-medium"
+            >
+              Try signing up again
+            </button>
+          </p>
+        </CardFooter>
       </Card>
     </div>
   );
