@@ -42,11 +42,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const signUp = async (email: string, password: string, fullName: string) => {
-    // Simple signup - trigger handles profile creation
+    // ✅ FIXED: Added emailRedirectTo option
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: { 
+        // ✅ Redirect to login after email verification
+        emailRedirectTo: `${window.location.origin}/login`,
         data: { 
           full_name: fullName 
         }
@@ -54,9 +56,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
     
     if (error) throw error;
-
+    
     // Profile is automatically created by the database trigger
-    // No need to manually insert - this was causing the 401 error
+    // User will be redirected to login page after clicking email verification link
   };
 
   const signIn = async (email: string, password: string) => {
