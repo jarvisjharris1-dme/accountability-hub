@@ -23,9 +23,9 @@ export function PendingInvitations() {
     if (user?.id) {
       loadInvitations();
       
-      // Subscribe to new invitations
-      const subscription = supabase
-        .channel('circle_invitations')
+      // Subscribe to new invitations with realtime
+      const channel = supabase
+        .channel(`circle-invitations-${user.id}`)
         .on(
           'postgres_changes',
           {
@@ -34,14 +34,31 @@ export function PendingInvitations() {
             table: 'circle_invitations',
             filter: `invitee_id=eq.${user.id}`
           },
-          () => {
+          (payload) => {
+            console.log('New invitation received:', payload);
             loadInvitations();
           }
         )
-        .subscribe();
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'circle_invitations',
+            filter: `invitee_id=eq.${user.id}`
+          },
+          (payload) => {
+            console.log('Invitation updated:', payload);
+            loadInvitations();
+          }
+        )
+        .subscribe((status) => {
+          console.log('Circle invitations subscription status:', status);
+        });
 
       return () => {
-        subscription.unsubscribe();
+        console.log('Unsubscribing from circle invitations channel');
+        supabase.removeChannel(channel);
       };
     }
   }, [user]);
@@ -132,7 +149,7 @@ export function PendingInvitations() {
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#1a2332]"></div>
       </div>
     );
-  };
+  }
 
   if (invitations.length === 0) {
     return null; // Don't show anything if no invitations
@@ -203,7 +220,7 @@ export function PendingInvitations() {
                     <button
                       onClick={() => handleResponse(invitation.id, true)}
                       disabled={responding === invitation.id}
-                      className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center gap-2"
+                      className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center gap-2 transition-colors"
                     >
                       <Check className="w-4 h-4" />
                       Accept
@@ -211,7 +228,7 @@ export function PendingInvitations() {
                     <button
                       onClick={() => handleResponse(invitation.id, false)}
                       disabled={responding === invitation.id}
-                      className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300 disabled:opacity-50 flex items-center gap-2"
+                      className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300 disabled:opacity-50 flex items-center gap-2 transition-colors"
                     >
                       <X className="w-4 h-4" />
                       Decline
@@ -220,8 +237,8 @@ export function PendingInvitations() {
                 )}
 
                 {expired && (
-                  <div className="text-sm text-gray-500 italic">
-                    This invitation has expired
+                  <div className="text-sm text-gray-500 italic flex-shrink-0">
+                    Expired
                   </div>
                 )}
               </div>
