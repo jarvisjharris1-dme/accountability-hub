@@ -36,18 +36,18 @@ interface WorkshopProgress {
 }
 
 const STAGES = [
-  { id: 'awareness', name: 'Awareness', description: 'Understanding yourself', color: 'blue' },
-  { id: 'acceptance', name: 'Acceptance', description: 'Embracing your truth', color: 'purple' },
-  { id: 'accountability', name: 'Accountability', description: 'Taking ownership', color: 'green' },
-  { id: 'action', name: 'Action', description: 'Making moves', color: 'orange' },
-  { id: 'achievement', name: 'Achievement', description: 'Reaching milestones', color: 'red' },
-  { id: 'advocacy', name: 'Advocacy', description: 'Supporting others', color: 'pink' },
-  { id: 'abundance', name: 'Abundance', description: 'Living fully', color: 'yellow' }
+  { id: 'Awareness', name: 'Awareness', description: 'Understanding yourself', color: 'blue' },
+  { id: 'Acceptance', name: 'Acceptance', description: 'Embracing your truth', color: 'purple' },
+  { id: 'Accountability', name: 'Accountability', description: 'Taking ownership', color: 'green' },
+  { id: 'Action', name: 'Action', description: 'Making moves', color: 'orange' },
+  { id: 'Achievement', name: 'Achievement', description: 'Reaching milestones', color: 'red' },
+  { id: 'Advocacy', name: 'Advocacy', description: 'Supporting others', color: 'pink' },
+  { id: 'Abundance', name: 'Abundance', description: 'Living fully', color: 'yellow' }
 ];
 
 export function WorkshopViewer() {
   const { user } = useAuth();
-  const [selectedStage, setSelectedStage] = useState<string>('awareness');
+  const [selectedStage, setSelectedStage] = useState<string>('Awareness');
   const [workshops, setWorkshops] = useState<WorkshopContent[]>([]);
   const [progress, setProgress] = useState<Record<string, WorkshopProgress>>({});
   const [selectedWorkshop, setSelectedWorkshop] = useState<WorkshopContent | null>(null);
@@ -61,9 +61,10 @@ export function WorkshopViewer() {
   const loadWorkshops = async () => {
     try {
       const { data, error } = await supabase
-        .from('workshop_content')
+        .from('workshops')  // ✅ FIXED: Changed from 'workshop_content' to 'workshops'
         .select('*')
-        .order('created_at', { ascending: true });
+        .eq('is_published', true)  // ✅ ADDED: Only load published workshops
+        .order('order_index', { ascending: true });  // ✅ FIXED: Order by order_index instead of created_at
 
       if (error) throw error;
       setWorkshops(data || []);
