@@ -1,7 +1,7 @@
 {
-  "name": "Discovering Me - Accountability Platform",
-  "short_name": "Discovering Me",
-  "description": "Men's accountability platform for personal growth and development",
+  "name": "Accountable Me - Personal Accountability Platform",
+  "short_name": "Accountable Me",
+  "description": "Personal accountability platform built for personal growth and development",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#1a2332",
