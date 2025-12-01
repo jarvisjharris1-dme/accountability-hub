@@ -11,6 +11,7 @@ import { GoalTracker } from './sections/GoalTracker';
 import NotificationSettings from './sections/NotificationSettings';
 import NotificationPermissionBanner from './ui/NotificationPermissionBanner';
 import { EmailVerificationBanner } from './ui/EmailVerificationBanner';
+import { NotificationBell } from './NotificationBell';
 import { BottomNav } from './navigation/BottomNav';
 import { PWAInstallPrompt } from './ui/PWAInstallPrompt';
 import { UserProfile, AccountabilityArea } from '../types';
@@ -227,23 +228,24 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
             alt="Accountable" 
             className="h-16 w-auto"
           />
-          <div className="flex items-center gap-4">
-            {user && (
-              <button
-                onClick={() => handleTabChange('profile')}
-                className="flex items-center gap-2 hover:bg-gray-100 rounded-lg px-3 py-2 transition-colors"
-              >
-                <img 
-                  src={user.avatar} 
-                  alt={user.name} 
-                  className="h-10 w-10 rounded-full border-2 border-gray-200"
-                />
-                <span className="text-sm font-medium text-gray-700 hidden sm:block">
-                  {user.name}
-                </span>
-              </button>
-            )}
-          </div>
+        <div className="flex items-center gap-4">
+  <NotificationBell />  {/* ✅ ADD THIS LINE */}
+  {user && (
+    <button
+      onClick={() => handleTabChange('profile')}
+      className="flex items-center gap-2 hover:bg-gray-100 rounded-lg px-3 py-2 transition-colors"
+    >
+      <img 
+        src={user.avatar} 
+        alt={user.name} 
+        className="h-10 w-10 rounded-full border-2 border-gray-200"
+      />
+      <span className="text-sm font-medium text-gray-700 hidden sm:block">
+        {user.name}
+      </span>
+    </button>
+  )}
+</div>
         </div>
       </header>
 
