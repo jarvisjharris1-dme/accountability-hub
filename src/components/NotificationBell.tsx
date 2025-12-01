@@ -25,9 +25,9 @@ export function NotificationBell() {
     if (user?.id) {
       loadNotifications();
       
-      // Subscribe to new notifications
-      const subscription = supabase
-        .channel('notifications')
+      // Subscribe to new notifications with better channel handling
+      const channel = supabase
+        .channel(`notifications-${user.id}`)
         .on(
           'postgres_changes',
           {
@@ -36,14 +36,40 @@ export function NotificationBell() {
             table: 'notifications',
             filter: `user_id=eq.${user.id}`
           },
-          () => {
+          (payload) => {
+            console.log('New notification received:', payload);
+            // Add new notification to the list immediately
+            const newNotification = payload.new as Notification;
+            setNotifications(prev => [newNotification, ...prev.slice(0, 9)]);
+            setUnreadCount(prev => prev + 1);
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'notifications',
+            filter: `user_id=eq.${user.id}`
+          },
+          (payload) => {
+            console.log('Notification updated:', payload);
+            // Update the notification in the list
+            const updatedNotification = payload.new as Notification;
+            setNotifications(prev => 
+              prev.map(n => n.id === updatedNotification.id ? updatedNotification : n)
+            );
+            // Recalculate unread count
             loadNotifications();
           }
         )
-        .subscribe();
+        .subscribe((status) => {
+          console.log('Realtime subscription status:', status);
+        });
 
       return () => {
-        subscription.unsubscribe();
+        console.log('Unsubscribing from notifications channel');
+        supabase.removeChannel(channel);
       };
     }
   }, [user]);
@@ -70,12 +96,18 @@ export function NotificationBell() {
 
   const markAsRead = async (notificationId: string) => {
     try {
-      await supabase
+      const { error } = await supabase
         .from('notifications')
         .update({ read: true })
         .eq('id', notificationId);
 
-      loadNotifications();
+      if (error) throw error;
+
+      // Update local state immediately
+      setNotifications(prev =>
+        prev.map(n => n.id === notificationId ? { ...n, read: true } : n)
+      );
+      setUnreadCount(prev => Math.max(0, prev - 1));
     } catch (error) {
       console.error('Error marking notification as read:', error);
     }
@@ -98,7 +130,7 @@ export function NotificationBell() {
       >
         <Bell className="w-6 h-6 text-gray-700" />
         {unreadCount > 0 && (
-          <span className="absolute top-0 right-0 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+          <span className="absolute top-0 right-0 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center animate-pulse">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
