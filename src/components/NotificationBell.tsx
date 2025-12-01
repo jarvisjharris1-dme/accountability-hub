@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { Bell } from 'lucide-react';
@@ -20,12 +20,14 @@ export function NotificationBell() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [usePolling, setUsePolling] = useState(false);
+  const pollingInterval = useRef<NodeJS.Timeout>();
 
   useEffect(() => {
     if (user?.id) {
       loadNotifications();
       
-      // Subscribe to new notifications with better channel handling
+      // Try realtime first
       const channel = supabase
         .channel(`notifications-${user.id}`)
         .on(
@@ -37,8 +39,7 @@ export function NotificationBell() {
             filter: `user_id=eq.${user.id}`
           },
           (payload) => {
-            console.log('New notification received:', payload);
-            // Add new notification to the list immediately
+            console.log('✅ Realtime working! New notification:', payload);
             const newNotification = payload.new as Notification;
             setNotifications(prev => [newNotification, ...prev.slice(0, 9)]);
             setUnreadCount(prev => prev + 1);
@@ -53,26 +54,66 @@ export function NotificationBell() {
             filter: `user_id=eq.${user.id}`
           },
           (payload) => {
-            console.log('Notification updated:', payload);
-            // Update the notification in the list
+            console.log('✅ Realtime working! Notification updated:', payload);
             const updatedNotification = payload.new as Notification;
             setNotifications(prev => 
               prev.map(n => n.id === updatedNotification.id ? updatedNotification : n)
             );
-            // Recalculate unread count
             loadNotifications();
           }
         )
         .subscribe((status) => {
           console.log('Realtime subscription status:', status);
+          
+          if (status === 'SUBSCRIBED') {
+            console.log('✅ Realtime enabled');
+            setUsePolling(false);
+            // Clear polling if it was running
+            if (pollingInterval.current) {
+              clearInterval(pollingInterval.current);
+            }
+          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            console.warn('⚠️ Realtime failed, falling back to polling');
+            setUsePolling(true);
+          }
         });
 
+      // Fallback: Start polling after 5 seconds if realtime doesn't connect
+      const fallbackTimer = setTimeout(() => {
+        if (!channel.state || channel.state !== 'joined') {
+          console.warn('⚠️ Realtime timeout, using polling instead');
+          setUsePolling(true);
+        }
+      }, 5000);
+
       return () => {
+        clearTimeout(fallbackTimer);
         console.log('Unsubscribing from notifications channel');
         supabase.removeChannel(channel);
+        if (pollingInterval.current) {
+          clearInterval(pollingInterval.current);
+        }
       };
     }
   }, [user]);
+
+  // Polling fallback (checks every 10 seconds)
+  useEffect(() => {
+    if (usePolling && user?.id) {
+      console.log('🔄 Starting polling for notifications (every 10s)');
+      
+      pollingInterval.current = setInterval(() => {
+        console.log('🔄 Polling for new notifications...');
+        loadNotifications();
+      }, 10000); // Check every 10 seconds
+
+      return () => {
+        if (pollingInterval.current) {
+          clearInterval(pollingInterval.current);
+        }
+      };
+    }
+  }, [usePolling, user]);
 
   const loadNotifications = async () => {
     if (!user?.id) return;
@@ -103,7 +144,6 @@ export function NotificationBell() {
 
       if (error) throw error;
 
-      // Update local state immediately
       setNotifications(prev =>
         prev.map(n => n.id === notificationId ? { ...n, read: true } : n)
       );
@@ -118,7 +158,6 @@ export function NotificationBell() {
     setShowDropdown(false);
     
     if (notification.link) {
-      // ✅ Map internal links to tab state navigation
       const internalTabs: { [key: string]: string } = {
         '/circle': 'circle',
         '/dashboard': 'dashboard',
@@ -132,10 +171,8 @@ export function NotificationBell() {
       const tabName = internalTabs[notification.link];
       
       if (tabName) {
-        // Internal tab - navigate to home with tab state
         navigate('/', { state: { tab: tabName } });
       } else {
-        // External route - navigate directly
         navigate(notification.link);
       }
     }
@@ -148,6 +185,7 @@ export function NotificationBell() {
         onClick={() => setShowDropdown(!showDropdown)}
         className="relative p-2 rounded-lg hover:bg-gray-100 transition-colors"
         aria-label="Notifications"
+        title={usePolling ? 'Notifications (polling mode)' : 'Notifications'}
       >
         <Bell className="w-6 h-6 text-gray-700" />
         {unreadCount > 0 && (
@@ -155,24 +193,36 @@ export function NotificationBell() {
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
+        {/* Show polling indicator */}
+        {usePolling && (
+          <span className="absolute bottom-0 right-0 w-2 h-2 bg-yellow-500 rounded-full" 
+                title="Using polling instead of realtime" />
+        )}
       </button>
 
       {/* Dropdown */}
       {showDropdown && (
         <>
-          {/* Backdrop */}
           <div
             className="fixed inset-0 z-10"
             onClick={() => setShowDropdown(false)}
           />
 
-          {/* Notifications List */}
           <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-xl border border-gray-200 z-20 max-h-96 overflow-y-auto">
             <div className="p-4 border-b border-gray-200">
-              <h3 className="font-semibold text-gray-900">Notifications</h3>
-              {unreadCount > 0 && (
-                <p className="text-sm text-gray-500">{unreadCount} unread</p>
-              )}
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-semibold text-gray-900">Notifications</h3>
+                  {unreadCount > 0 && (
+                    <p className="text-sm text-gray-500">{unreadCount} unread</p>
+                  )}
+                </div>
+                {usePolling && (
+                  <span className="text-xs text-yellow-600 bg-yellow-50 px-2 py-1 rounded">
+                    Polling
+                  </span>
+                )}
+              </div>
             </div>
 
             {notifications.length === 0 ? (
