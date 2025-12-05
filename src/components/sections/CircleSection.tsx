@@ -247,33 +247,60 @@ export function CircleSection() {
 
   // Send Invitation
   const handleSendInvitation = async () => {
-    if (!inviteEmail.trim() || !user?.id) return;
+  if (!inviteEmail.trim() || !user?.id) return;
 
-    setSending(true);
+  setSending(true);
+  try {
+    // Step 1: Create invitation in database
+    const { data: invitation, error: dbError } = await supabase
+      .from('circle_invitations')
+      .insert({
+        inviter_id: user.id,
+        invitee_email: inviteEmail.trim(),
+        recipient_email: inviteEmail.trim(),  // 🔥 ADD THIS LINE
+        message: inviteMessage.trim() || null,
+        status: 'pending',
+        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+      })
+      .select()
+      .single();
+
+    if (dbError) throw dbError;
+
+    console.log('✅ Invitation created:', invitation);
+
+    // Step 2: Call Edge Function to send email
     try {
-      const { error } = await supabase
-        .from('circle_invitations')
-        .insert({
-          inviter_id: user.id,
-          invitee_email: inviteEmail.trim(),
-          message: inviteMessage.trim() || null,
-          status: 'pending',
-          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
-        });
+      console.log('📧 Calling Edge Function with invitation_id:', invitation.id);
+      
+      const { data: emailData, error: emailError } = await supabase.functions.invoke('send-circle-invitation-email', {
+        body: {
+          invitation_id: invitation.id
+        }
+      });
 
-      if (error) throw error;
-
-      alert('✅ Invitation sent!');
-      setShowInviteModal(false);
-      setInviteEmail('');
-      setInviteMessage('');
-    } catch (error: any) {
-      console.error('Error sending invitation:', error);
-      alert('Failed to send invitation: ' + error.message);
-    } finally {
-      setSending(false);
+      if (emailError) {
+        console.error('❌ Email error:', emailError);
+        alert('⚠️ Invitation created but email failed to send.\n\nError: ' + JSON.stringify(emailError));
+      } else {
+        console.log('✅ Email sent successfully!', emailData);
+        alert('✅ Invitation sent with email!');
+      }
+    } catch (emailErr: any) {
+      console.error('❌ Edge Function error:', emailErr);
+      alert('⚠️ Invitation created but email failed.\n\nError: ' + emailErr.message);
     }
-  };
+
+    setShowInviteModal(false);
+    setInviteEmail('');
+    setInviteMessage('');
+  } catch (error: any) {
+    console.error('Error sending invitation:', error);
+    alert('Failed to send invitation: ' + error.message);
+  } finally {
+    setSending(false);
+  }
+};
 
   // Send Chat Message - Uses "message" field
   const handleSendMessage = async () => {
