@@ -1,10 +1,9 @@
-// CircleSection.tsx - COMPLETE with ALL Features
-// Chat, Check-ins, Support Requests, Invitations, Members
+// CircleSection.tsx - Fixed to work WITHOUT user_id in circle_chat_messages
+// This version queries by circle membership instead
 
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { useRealtimePolling } from '@/hooks/useRealtimePolling';
 import { 
   UserPlus, 
   Send, 
@@ -12,10 +11,7 @@ import {
   MessageCircle, 
   Users, 
   CheckCircle2,
-  AlertCircle,
-  Clock,
-  Heart,
-  TrendingUp
+  AlertCircle
 } from 'lucide-react';
 
 export function CircleSection() {
@@ -23,7 +19,15 @@ export function CircleSection() {
   const [activeTab, setActiveTab] = useState<'members' | 'chat' | 'checkins' | 'support'>('members');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
-  // Invitation Modal State
+  // Data State
+  const [circleMembers, setCircleMembers] = useState<any[]>([]);
+  const [messages, setMessages] = useState<any[]>([]);
+  const [checkIns, setCheckIns] = useState<any[]>([]);
+  const [supportRequests, setSupportRequests] = useState<any[]>([]);
+  const [profiles, setProfiles] = useState<Record<string, any>>({});
+  
+  // UI State
+  const [loading, setLoading] = useState(true);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteMessage, setInviteMessage] = useState('');
@@ -44,73 +48,190 @@ export function CircleSection() {
   const [supportMessage, setSupportMessage] = useState('');
   const [submittingSupportRequest, setSubmittingSupportRequest] = useState(false);
 
-  // Auto-updating data with realtime/polling
-  const { data: circleMembers, reload: reloadMembers } = useRealtimePolling(
-    () => supabase
-      .from('circle_members')
-      .select(`
-        *,
-        member:profiles!member_id(id, full_name, avatar, city, state)
-      `)
-      .eq('user_id', user?.id)
-      .eq('status', 'active')
-      .order('joined_at', { ascending: false }),
-    { 
-      table: 'circle_members',
-      pollInterval: 15000,
-      enabled: activeTab === 'members'
-    }
-  );
+  // Load profiles separately
+  const loadProfiles = async (userIds: string[]) => {
+    if (!userIds.length) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, full_name, avatar, city, state')
+        .in('id', userIds);
 
-  const { data: messages, reload: reloadMessages } = useRealtimePolling(
-    () => supabase
-      .from('circle_chat_messages')
-      .select(`
-        *,
-        sender:profiles!sender_id(full_name, avatar)
-      `)
-      .eq('user_id', user?.id)
-      .order('created_at', { ascending: true }),
-    { 
-      table: 'circle_chat_messages',
-      pollInterval: 5000,
-      enabled: activeTab === 'chat'
-    }
-  );
+      if (error) {
+        console.error('Error loading profiles:', error);
+        return;
+      }
 
-  const { data: checkIns, reload: reloadCheckIns } = useRealtimePolling(
-    () => supabase
-      .from('check_ins')
-      .select(`
-        *,
-        user:profiles!user_id(full_name, avatar)
-      `)
-      .in('user_id', [user?.id, ...(circleMembers?.map(m => m.member_id) || [])])
-      .order('created_at', { ascending: false })
-      .limit(20),
-    { 
-      table: 'check_ins',
-      pollInterval: 10000,
-      enabled: activeTab === 'checkins'
+      const profileMap: Record<string, any> = {};
+      data?.forEach((profile) => {
+        profileMap[profile.id] = profile;
+      });
+      setProfiles(prev => ({ ...prev, ...profileMap }));
+    } catch (error) {
+      console.error('Error loading profiles:', error);
     }
-  );
+  };
 
-  const { data: supportRequests, reload: reloadSupportRequests } = useRealtimePolling(
-    () => supabase
-      .from('support_requests')
-      .select(`
-        *,
-        requester:profiles!user_id(full_name, avatar)
-      `)
-      .in('user_id', circleMembers?.map(m => m.member_id) || [])
-      .eq('status', 'active')
-      .order('created_at', { ascending: false }),
-    { 
-      table: 'support_requests',
-      pollInterval: 15000,
-      enabled: activeTab === 'support'
+  // Load circle members
+  const loadCircleMembers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('circle_members')
+        .select('*')
+        .eq('user_id', user?.id)
+        .eq('status', 'active')
+        .order('joined_at', { ascending: false });
+
+      if (error) throw error;
+      
+      setCircleMembers(data || []);
+      
+      // Load profiles for members
+      if (data && data.length > 0) {
+        const memberIds = data.map(m => m.member_id);
+        await loadProfiles(memberIds);
+      }
+    } catch (error: any) {
+      console.error('Error loading circle members:', error);
     }
-  );
+  };
+
+  // Load messages - UPDATED to work without user_id
+  const loadMessages = async () => {
+    try {
+      // Get all member IDs in the circle
+      const memberIds = circleMembers.map(m => m.member_id);
+      const allUserIds = [user?.id, ...memberIds].filter(Boolean);
+      
+      if (allUserIds.length === 0) {
+        setMessages([]);
+        return;
+      }
+
+      // Query messages from anyone in the circle
+      const { data, error } = await supabase
+        .from('circle_chat_messages')
+        .select('*')
+        .in('sender_id', allUserIds)
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+      
+      setMessages(data || []);
+      
+      // Load profiles for senders
+      if (data && data.length > 0) {
+        const senderIds = [...new Set(data.map(m => m.sender_id))];
+        await loadProfiles(senderIds);
+      }
+    } catch (error: any) {
+      console.error('Error loading messages:', error);
+    }
+  };
+
+  // Load check-ins
+  const loadCheckIns = async () => {
+    if (!circleMembers || circleMembers.length === 0) {
+      setCheckIns([]);
+      return;
+    }
+    
+    try {
+      const memberIds = circleMembers.map(m => m.member_id);
+      const allUserIds = [user?.id, ...memberIds];
+      
+      const { data, error } = await supabase
+        .from('check_ins')
+        .select('*')
+        .in('user_id', allUserIds)
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      if (error) throw error;
+      
+      setCheckIns(data || []);
+      
+      // Load profiles
+      if (data && data.length > 0) {
+        const userIds = [...new Set(data.map(c => c.user_id))];
+        await loadProfiles(userIds);
+      }
+    } catch (error: any) {
+      console.error('Error loading check-ins:', error);
+    }
+  };
+
+  // Load support requests
+  const loadSupportRequests = async () => {
+    if (!circleMembers || circleMembers.length === 0) {
+      setSupportRequests([]);
+      return;
+    }
+    
+    try {
+      const memberIds = circleMembers.map(m => m.member_id);
+      
+      const { data, error } = await supabase
+        .from('support_requests')
+        .select('*')
+        .in('user_id', memberIds)
+        .eq('status', 'active')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      
+      setSupportRequests(data || []);
+      
+      // Load profiles
+      if (data && data.length > 0) {
+        const userIds = [...new Set(data.map(s => s.user_id))];
+        await loadProfiles(userIds);
+      }
+    } catch (error: any) {
+      console.error('Error loading support requests:', error);
+    }
+  };
+
+  // Initial load
+  useEffect(() => {
+    if (user?.id) {
+      setLoading(true);
+      loadCircleMembers().finally(() => setLoading(false));
+    }
+  }, [user?.id]);
+
+  // Load tab-specific data
+  useEffect(() => {
+    if (!user?.id) return;
+    
+    if (activeTab === 'chat') {
+      loadMessages();
+    } else if (activeTab === 'checkins') {
+      loadCheckIns();
+    } else if (activeTab === 'support') {
+      loadSupportRequests();
+    }
+  }, [activeTab, circleMembers]);
+
+  // Auto-refresh
+  useEffect(() => {
+    if (!user?.id) return;
+    
+    const interval = setInterval(() => {
+      if (activeTab === 'members') {
+        loadCircleMembers();
+      } else if (activeTab === 'chat') {
+        loadMessages();
+      } else if (activeTab === 'checkins') {
+        loadCheckIns();
+      } else if (activeTab === 'support') {
+        loadSupportRequests();
+      }
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, [activeTab, user?.id, circleMembers]);
 
   // Scroll to bottom of chat
   useEffect(() => {
@@ -118,6 +239,16 @@ export function CircleSection() {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages, activeTab]);
+
+  // Helper to get profile
+  const getProfile = (userId: string) => {
+    return profiles[userId] || {
+      full_name: 'Unknown User',
+      avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${userId}`,
+      city: '',
+      state: ''
+    };
+  };
 
   // Send Invitation
   const handleSendInvitation = async () => {
@@ -137,7 +268,7 @@ export function CircleSection() {
 
       if (error) throw error;
 
-      alert('✅ Invitation sent! They will receive an email with your invitation.');
+      alert('✅ Invitation sent!');
       setShowInviteModal(false);
       setInviteEmail('');
       setInviteMessage('');
@@ -149,16 +280,16 @@ export function CircleSection() {
     }
   };
 
-  // Send Chat Message
+  // Send Chat Message - UPDATED to work without user_id
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !user?.id) return;
 
     setSendingMessage(true);
     try {
+      // Insert message with only sender_id (no user_id)
       const { error } = await supabase
         .from('circle_chat_messages')
         .insert({
-          user_id: user.id,
           sender_id: user.id,
           content: newMessage.trim(),
           created_at: new Date().toISOString()
@@ -167,10 +298,10 @@ export function CircleSection() {
       if (error) throw error;
 
       setNewMessage('');
-      reloadMessages();
-    } catch (error) {
+      await loadMessages();
+    } catch (error: any) {
       console.error('Error sending message:', error);
-      alert('Failed to send message');
+      alert('Failed to send message: ' + error.message);
     } finally {
       setSendingMessage(false);
     }
@@ -196,10 +327,10 @@ export function CircleSection() {
       alert('✅ Check-in submitted!');
       setCheckInText('');
       setCheckInMood(null);
-      reloadCheckIns();
-    } catch (error) {
+      await loadCheckIns();
+    } catch (error: any) {
       console.error('Error submitting check-in:', error);
-      alert('Failed to submit check-in');
+      alert('Failed to submit check-in: ' + error.message);
     } finally {
       setSubmittingCheckIn(false);
     }
@@ -223,14 +354,14 @@ export function CircleSection() {
 
       if (error) throw error;
 
-      alert('✅ Support request sent to your circle!');
+      alert('✅ Support request sent!');
       setShowSupportModal(false);
       setSupportCategory('');
       setSupportMessage('');
-      reloadSupportRequests();
-    } catch (error) {
+      await loadSupportRequests();
+    } catch (error: any) {
       console.error('Error submitting support request:', error);
-      alert('Failed to submit support request');
+      alert('Failed to submit support request: ' + error.message);
     } finally {
       setSubmittingSupportRequest(false);
     }
@@ -247,6 +378,14 @@ export function CircleSection() {
     return moods[mood] || '🙂';
   };
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#1a2332]"></div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -260,7 +399,6 @@ export function CircleSection() {
           </div>
           
           <div className="flex items-center gap-3">
-            {/* Support Request Button */}
             <button
               onClick={() => setShowSupportModal(true)}
               className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-red-700 transition-all"
@@ -269,7 +407,6 @@ export function CircleSection() {
               Need Support?
             </button>
             
-            {/* Invite Button */}
             <button
               onClick={() => setShowInviteModal(true)}
               className="flex items-center gap-2 bg-white text-[#1a2332] px-6 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-all shadow-lg"
@@ -284,27 +421,19 @@ export function CircleSection() {
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-white rounded-lg shadow p-4">
-          <div className="text-3xl font-bold text-[#1a2332] mb-1">
-            {circleMembers?.length || 0}
-          </div>
+          <div className="text-3xl font-bold text-[#1a2332] mb-1">{circleMembers.length}</div>
           <div className="text-sm text-gray-600">Circle Members</div>
         </div>
         <div className="bg-white rounded-lg shadow p-4">
-          <div className="text-3xl font-bold text-[#1a2332] mb-1">
-            {messages?.length || 0}
-          </div>
+          <div className="text-3xl font-bold text-[#1a2332] mb-1">{messages.length}</div>
           <div className="text-sm text-gray-600">Messages</div>
         </div>
         <div className="bg-white rounded-lg shadow p-4">
-          <div className="text-3xl font-bold text-[#1a2332] mb-1">
-            {checkIns?.length || 0}
-          </div>
+          <div className="text-3xl font-bold text-[#1a2332] mb-1">{checkIns.length}</div>
           <div className="text-sm text-gray-600">Check-ins</div>
         </div>
         <div className="bg-white rounded-lg shadow p-4">
-          <div className="text-3xl font-bold text-[#1a2332] mb-1">
-            {supportRequests?.length || 0}
-          </div>
+          <div className="text-3xl font-bold text-[#1a2332] mb-1">{supportRequests.length}</div>
           <div className="text-sm text-gray-600">Support Requests</div>
         </div>
       </div>
@@ -322,7 +451,7 @@ export function CircleSection() {
               }`}
             >
               <Users className="w-4 h-4" />
-              Members ({circleMembers?.length || 0})
+              Members ({circleMembers.length})
             </button>
             <button
               onClick={() => setActiveTab('chat')}
@@ -354,7 +483,7 @@ export function CircleSection() {
                   : 'text-gray-500 hover:text-gray-700'
               }`}
             >
-              <Heart className="w-4 h-4" />
+              <AlertCircle className="w-4 h-4" />
               Support
             </button>
           </div>
@@ -364,44 +493,43 @@ export function CircleSection() {
           {/* MEMBERS TAB */}
           {activeTab === 'members' && (
             <div className="space-y-4">
-              {circleMembers && circleMembers.length > 0 ? (
-                circleMembers.map((member) => (
-                  <div
-                    key={member.id}
-                    className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                  >
-                    <img
-                      src={member.member?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${member.member_id}`}
-                      alt={member.member?.full_name || 'Member'}
-                      className="w-12 h-12 rounded-full"
-                    />
-                    <div className="flex-1">
-                      <h4 className="font-semibold text-gray-900">
-                        {member.member?.full_name || 'Unknown Member'}
-                      </h4>
-                      <p className="text-sm text-gray-600">
-                        {member.member?.city && member.member?.state
-                          ? `${member.member.city}, ${member.member.state}`
-                          : 'Location not set'}
-                      </p>
+              {circleMembers.length > 0 ? (
+                circleMembers.map((member) => {
+                  const profile = getProfile(member.member_id);
+                  return (
+                    <div
+                      key={member.id}
+                      className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                    >
+                      <img
+                        src={profile.avatar}
+                        alt={profile.full_name}
+                        className="w-12 h-12 rounded-full"
+                      />
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-gray-900">{profile.full_name}</h4>
+                        <p className="text-sm text-gray-600">
+                          {profile.city && profile.state
+                            ? `${profile.city}, ${profile.state}`
+                            : 'Location not set'}
+                        </p>
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        Joined {new Date(member.joined_at).toLocaleDateString()}
+                      </div>
                     </div>
-                    <div className="text-xs text-gray-500">
-                      Joined {new Date(member.joined_at).toLocaleDateString()}
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               ) : (
                 <div className="text-center py-12">
                   <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                    No members yet
-                  </h3>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">No members yet</h3>
                   <p className="text-gray-600 mb-6">
-                    Start building your accountability circle by inviting people you trust
+                    Start building your accountability circle
                   </p>
                   <button
                     onClick={() => setShowInviteModal(true)}
-                    className="inline-flex items-center gap-2 bg-[#1a2332] text-white px-6 py-3 rounded-lg font-semibold hover:bg-[#2d3e50] transition-colors"
+                    className="inline-flex items-center gap-2 bg-[#1a2332] text-white px-6 py-3 rounded-lg font-semibold hover:bg-[#2d3e50]"
                   >
                     <UserPlus className="w-5 h-5" />
                     Invite Your First Member
@@ -414,29 +542,29 @@ export function CircleSection() {
           {/* CHAT TAB */}
           {activeTab === 'chat' && (
             <div className="space-y-4">
-              {/* Messages */}
               <div className="h-96 overflow-y-auto space-y-3 p-4 bg-gray-50 rounded-lg">
-                {messages && messages.length > 0 ? (
-                  messages.map((message) => (
-                    <div key={message.id} className="flex items-start gap-3">
-                      <img
-                        src={message.sender?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${message.sender_id}`}
-                        alt={message.sender?.full_name || 'User'}
-                        className="w-10 h-10 rounded-full"
-                      />
-                      <div className="flex-1">
-                        <div className="flex items-baseline gap-2">
-                          <span className="font-semibold text-gray-900">
-                            {message.sender?.full_name || 'Unknown'}
-                          </span>
-                          <span className="text-xs text-gray-500">
-                            {new Date(message.created_at).toLocaleTimeString()}
-                          </span>
+                {messages.length > 0 ? (
+                  messages.map((message) => {
+                    const sender = getProfile(message.sender_id);
+                    return (
+                      <div key={message.id} className="flex items-start gap-3">
+                        <img
+                          src={sender.avatar}
+                          alt={sender.full_name}
+                          className="w-10 h-10 rounded-full"
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-baseline gap-2">
+                            <span className="font-semibold text-gray-900">{sender.full_name}</span>
+                            <span className="text-xs text-gray-500">
+                              {new Date(message.created_at).toLocaleTimeString()}
+                            </span>
+                          </div>
+                          <p className="text-gray-700 mt-1">{message.content}</p>
                         </div>
-                        <p className="text-gray-700 mt-1">{message.content}</p>
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
                 ) : (
                   <div className="text-center py-12 text-gray-500">
                     No messages yet. Start the conversation!
@@ -445,7 +573,6 @@ export function CircleSection() {
                 <div ref={messagesEndRef} />
               </div>
 
-              {/* Message Input */}
               <div className="flex gap-2">
                 <input
                   type="text"
@@ -459,7 +586,7 @@ export function CircleSection() {
                 <button
                   onClick={handleSendMessage}
                   disabled={sendingMessage || !newMessage.trim()}
-                  className="bg-[#1a2332] text-white px-6 py-3 rounded-lg hover:bg-[#2d3e50] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  className="bg-[#1a2332] text-white px-6 py-3 rounded-lg hover:bg-[#2d3e50] disabled:opacity-50 flex items-center gap-2"
                 >
                   <Send className="w-5 h-5" />
                 </button>
@@ -470,11 +597,9 @@ export function CircleSection() {
           {/* CHECK-INS TAB */}
           {activeTab === 'checkins' && (
             <div className="space-y-6">
-              {/* Submit Check-in */}
               <div className="bg-gray-50 rounded-lg p-6 space-y-4">
                 <h3 className="text-lg font-semibold text-gray-900">How are you doing today?</h3>
                 
-                {/* Mood Selection */}
                 <div className="flex gap-3 flex-wrap">
                   {(['great', 'good', 'okay', 'struggling'] as const).map((mood) => (
                     <button
@@ -491,7 +616,6 @@ export function CircleSection() {
                   ))}
                 </div>
 
-                {/* Check-in Text */}
                 <textarea
                   value={checkInText}
                   onChange={(e) => setCheckInText(e.target.value)}
@@ -504,40 +628,40 @@ export function CircleSection() {
                 <button
                   onClick={handleSubmitCheckIn}
                   disabled={!checkInText.trim() || !checkInMood || submittingCheckIn}
-                  className="w-full bg-[#1a2332] text-white px-6 py-3 rounded-lg font-semibold hover:bg-[#2d3e50] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className="w-full bg-[#1a2332] text-white px-6 py-3 rounded-lg font-semibold hover:bg-[#2d3e50] disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {submittingCheckIn ? 'Submitting...' : 'Submit Check-in'}
                   <CheckCircle2 className="w-5 h-5" />
                 </button>
               </div>
 
-              {/* Recent Check-ins */}
               <div className="space-y-3">
                 <h3 className="text-lg font-semibold text-gray-900">Recent Check-ins</h3>
-                {checkIns && checkIns.length > 0 ? (
-                  checkIns.map((checkIn) => (
-                    <div key={checkIn.id} className="bg-white border border-gray-200 rounded-lg p-4">
-                      <div className="flex items-start gap-3">
-                        <img
-                          src={checkIn.user?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${checkIn.user_id}`}
-                          alt={checkIn.user?.full_name || 'User'}
-                          className="w-10 h-10 rounded-full"
-                        />
-                        <div className="flex-1">
-                          <div className="flex items-baseline gap-2 mb-1">
-                            <span className="font-semibold text-gray-900">
-                              {checkIn.user?.full_name || 'Unknown'}
-                            </span>
-                            <span className="text-2xl">{getMoodEmoji(checkIn.mood)}</span>
-                            <span className="text-xs text-gray-500">
-                              {new Date(checkIn.created_at).toLocaleString()}
-                            </span>
+                {checkIns.length > 0 ? (
+                  checkIns.map((checkIn) => {
+                    const profile = getProfile(checkIn.user_id);
+                    return (
+                      <div key={checkIn.id} className="bg-white border border-gray-200 rounded-lg p-4">
+                        <div className="flex items-start gap-3">
+                          <img
+                            src={profile.avatar}
+                            alt={profile.full_name}
+                            className="w-10 h-10 rounded-full"
+                          />
+                          <div className="flex-1">
+                            <div className="flex items-baseline gap-2 mb-1">
+                              <span className="font-semibold text-gray-900">{profile.full_name}</span>
+                              <span className="text-2xl">{getMoodEmoji(checkIn.mood)}</span>
+                              <span className="text-xs text-gray-500">
+                                {new Date(checkIn.created_at).toLocaleString()}
+                              </span>
+                            </div>
+                            <p className="text-gray-700">{checkIn.content}</p>
                           </div>
-                          <p className="text-gray-700">{checkIn.content}</p>
                         </div>
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
                 ) : (
                   <div className="text-center py-8 text-gray-500">
                     No check-ins yet. Be the first to share!
@@ -550,32 +674,33 @@ export function CircleSection() {
           {/* SUPPORT TAB */}
           {activeTab === 'support' && (
             <div className="space-y-4">
-              {supportRequests && supportRequests.length > 0 ? (
-                supportRequests.map((request) => (
-                  <div key={request.id} className="bg-red-50 border border-red-200 rounded-lg p-4">
-                    <div className="flex items-start gap-3">
-                      <img
-                        src={request.requester?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${request.user_id}`}
-                        alt={request.requester?.full_name || 'User'}
-                        className="w-10 h-10 rounded-full"
-                      />
-                      <div className="flex-1">
-                        <div className="flex items-baseline gap-2 mb-1">
-                          <span className="font-semibold text-gray-900">
-                            {request.requester?.full_name || 'Unknown'}
-                          </span>
-                          <span className="text-xs px-2 py-1 bg-red-200 text-red-800 rounded-full">
-                            {request.category}
-                          </span>
-                          <span className="text-xs text-gray-500">
-                            {new Date(request.created_at).toLocaleString()}
-                          </span>
+              {supportRequests.length > 0 ? (
+                supportRequests.map((request) => {
+                  const profile = getProfile(request.user_id);
+                  return (
+                    <div key={request.id} className="bg-red-50 border border-red-200 rounded-lg p-4">
+                      <div className="flex items-start gap-3">
+                        <img
+                          src={profile.avatar}
+                          alt={profile.full_name}
+                          className="w-10 h-10 rounded-full"
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-baseline gap-2 mb-1">
+                            <span className="font-semibold text-gray-900">{profile.full_name}</span>
+                            <span className="text-xs px-2 py-1 bg-red-200 text-red-800 rounded-full">
+                              {request.category}
+                            </span>
+                            <span className="text-xs text-gray-500">
+                              {new Date(request.created_at).toLocaleString()}
+                            </span>
+                          </div>
+                          <p className="text-gray-700">{request.message}</p>
                         </div>
-                        <p className="text-gray-700">{request.message}</p>
                       </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               ) : (
                 <div className="text-center py-12 text-gray-500">
                   No active support requests
@@ -586,25 +711,19 @@ export function CircleSection() {
         </div>
       </div>
 
-      {/* INVITE MODAL */}
+      {/* Invite Modal */}
       {showInviteModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl max-w-md w-full p-6">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-bold text-gray-900">Invite to Your Circle</h2>
-              <button
-                onClick={() => setShowInviteModal(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
+              <button onClick={() => setShowInviteModal(false)} className="text-gray-400 hover:text-gray-600">
                 <X className="w-6 h-6" />
               </button>
             </div>
-
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Email Address *
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Email Address *</label>
                 <input
                   type="email"
                   value={inviteEmail}
@@ -614,11 +733,8 @@ export function CircleSection() {
                   disabled={sending}
                 />
               </div>
-
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Personal Message (Optional)
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Personal Message (Optional)</label>
                 <textarea
                   value={inviteMessage}
                   onChange={(e) => setInviteMessage(e.target.value)}
@@ -628,16 +744,14 @@ export function CircleSection() {
                   disabled={sending}
                 />
               </div>
-
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                 <p className="text-sm text-blue-800">
                   <strong>They'll receive:</strong><br />
-                  • Email invitation with your personal message<br />
+                  • Email invitation<br />
                   • In-app notification<br />
-                  • Link to accept and join your circle
+                  • Link to join
                 </p>
               </div>
-
               <div className="flex gap-3">
                 <button
                   onClick={() => setShowInviteModal(false)}
@@ -649,7 +763,7 @@ export function CircleSection() {
                 <button
                   onClick={handleSendInvitation}
                   disabled={!inviteEmail.trim() || sending}
-                  className="flex-1 px-4 py-3 bg-[#1a2332] text-white rounded-lg hover:bg-[#2d3e50] font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className="flex-1 px-4 py-3 bg-[#1a2332] text-white rounded-lg hover:bg-[#2d3e50] font-medium disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {sending ? 'Sending...' : 'Send Invitation'}
                   <Send className="w-4 h-4" />
@@ -660,25 +774,19 @@ export function CircleSection() {
         </div>
       )}
 
-      {/* SUPPORT REQUEST MODAL */}
+      {/* Support Modal */}
       {showSupportModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl max-w-md w-full p-6">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-bold text-gray-900">Request Support</h2>
-              <button
-                onClick={() => setShowSupportModal(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
+              <button onClick={() => setShowSupportModal(false)} className="text-gray-400 hover:text-gray-600">
                 <X className="w-6 h-6" />
               </button>
             </div>
-
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Category *
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Category *</label>
                 <select
                   value={supportCategory}
                   onChange={(e) => setSupportCategory(e.target.value)}
@@ -694,11 +802,8 @@ export function CircleSection() {
                   <option value="other">Other</option>
                 </select>
               </div>
-
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Message *
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Message *</label>
                 <textarea
                   value={supportMessage}
                   onChange={(e) => setSupportMessage(e.target.value)}
@@ -708,13 +813,11 @@ export function CircleSection() {
                   disabled={submittingSupportRequest}
                 />
               </div>
-
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                 <p className="text-sm text-yellow-800">
-                  Your circle will be notified immediately and can respond with support and encouragement.
+                  Your circle will be notified immediately.
                 </p>
               </div>
-
               <div className="flex gap-3">
                 <button
                   onClick={() => setShowSupportModal(false)}
@@ -726,7 +829,7 @@ export function CircleSection() {
                 <button
                   onClick={handleSubmitSupportRequest}
                   disabled={!supportCategory || !supportMessage.trim() || submittingSupportRequest}
-                  className="flex-1 px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className="flex-1 px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {submittingSupportRequest ? 'Sending...' : 'Send Request'}
                   <AlertCircle className="w-4 h-4" />
