@@ -1,5 +1,5 @@
-// CircleSection.tsx - Fixed to work WITHOUT user_id in circle_chat_messages
-// This version queries by circle membership instead
+// CircleSection.tsx - FIXED to use "message" field (not "content")
+// Your table structure: id, circle_id (nullable), sender_id, message, created_at, edited_at, deleted_at, content
 
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -97,10 +97,9 @@ export function CircleSection() {
     }
   };
 
-  // Load messages - UPDATED to work without user_id
+  // Load messages - Uses "message" field, not "content"
   const loadMessages = async () => {
     try {
-      // Get all member IDs in the circle
       const memberIds = circleMembers.map(m => m.member_id);
       const allUserIds = [user?.id, ...memberIds].filter(Boolean);
       
@@ -109,11 +108,11 @@ export function CircleSection() {
         return;
       }
 
-      // Query messages from anyone in the circle
       const { data, error } = await supabase
         .from('circle_chat_messages')
         .select('*')
         .in('sender_id', allUserIds)
+        .is('deleted_at', null) // Don't show deleted messages
         .order('created_at', { ascending: true });
 
       if (error) throw error;
@@ -152,7 +151,6 @@ export function CircleSection() {
       
       setCheckIns(data || []);
       
-      // Load profiles
       if (data && data.length > 0) {
         const userIds = [...new Set(data.map(c => c.user_id))];
         await loadProfiles(userIds);
@@ -183,7 +181,6 @@ export function CircleSection() {
       
       setSupportRequests(data || []);
       
-      // Load profiles
       if (data && data.length > 0) {
         const userIds = [...new Set(data.map(s => s.user_id))];
         await loadProfiles(userIds);
@@ -280,19 +277,20 @@ export function CircleSection() {
     }
   };
 
-  // Send Chat Message - UPDATED to work without user_id
+  // Send Chat Message - FIXED: Uses "message" field (not "content")
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !user?.id) return;
 
     setSendingMessage(true);
     try {
-      // Insert message with only sender_id (no user_id)
+      // Use "message" field (not "content")
       const { error } = await supabase
         .from('circle_chat_messages')
         .insert({
           sender_id: user.id,
-          content: newMessage.trim(),
+          message: newMessage.trim(), // ✅ Using "message" field
           created_at: new Date().toISOString()
+          // circle_id is now nullable, so we don't need to provide it
         });
 
       if (error) throw error;
@@ -544,10 +542,10 @@ export function CircleSection() {
             <div className="space-y-4">
               <div className="h-96 overflow-y-auto space-y-3 p-4 bg-gray-50 rounded-lg">
                 {messages.length > 0 ? (
-                  messages.map((message) => {
-                    const sender = getProfile(message.sender_id);
+                  messages.map((msg) => {
+                    const sender = getProfile(msg.sender_id);
                     return (
-                      <div key={message.id} className="flex items-start gap-3">
+                      <div key={msg.id} className="flex items-start gap-3">
                         <img
                           src={sender.avatar}
                           alt={sender.full_name}
@@ -557,10 +555,10 @@ export function CircleSection() {
                           <div className="flex items-baseline gap-2">
                             <span className="font-semibold text-gray-900">{sender.full_name}</span>
                             <span className="text-xs text-gray-500">
-                              {new Date(message.created_at).toLocaleTimeString()}
+                              {new Date(msg.created_at).toLocaleTimeString()}
                             </span>
                           </div>
-                          <p className="text-gray-700 mt-1">{message.content}</p>
+                          <p className="text-gray-700 mt-1">{msg.message}</p>
                         </div>
                       </div>
                     );
@@ -842,4 +840,3 @@ export function CircleSection() {
     </div>
   );
 }
-
