@@ -1,55 +1,131 @@
-// CircleSection.tsx - Complete with Invite Feature
-// Add this to your CircleSection component
+// CircleSection.tsx - COMPLETE with ALL Features
+// Chat, Check-ins, Support Requests, Invitations, Members
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { UserPlus, Send, X, MessageCircle, Users } from 'lucide-react';
+import { useRealtimePolling } from '@/hooks/useRealtimePolling';
+import { 
+  UserPlus, 
+  Send, 
+  X, 
+  MessageCircle, 
+  Users, 
+  CheckCircle2,
+  AlertCircle,
+  Clock,
+  Heart,
+  TrendingUp
+} from 'lucide-react';
 
 export function CircleSection() {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'members' | 'chat'>('members');
+  const [activeTab, setActiveTab] = useState<'members' | 'chat' | 'checkins' | 'support'>('members');
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  // Invitation Modal State
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteMessage, setInviteMessage] = useState('');
   const [sending, setSending] = useState(false);
-  const [circleMembers, setCircleMembers] = useState<any[]>([]);
-  const [messages, setMessages] = useState<any[]>([]);
+  
+  // Chat State
   const [newMessage, setNewMessage] = useState('');
+  const [sendingMessage, setSendingMessage] = useState(false);
+  
+  // Check-in State
+  const [checkInText, setCheckInText] = useState('');
+  const [checkInMood, setCheckInMood] = useState<'great' | 'good' | 'okay' | 'struggling' | null>(null);
+  const [submittingCheckIn, setSubmittingCheckIn] = useState(false);
+  
+  // Support Request State
+  const [showSupportModal, setShowSupportModal] = useState(false);
+  const [supportCategory, setSupportCategory] = useState('');
+  const [supportMessage, setSupportMessage] = useState('');
+  const [submittingSupportRequest, setSubmittingSupportRequest] = useState(false);
 
-  // Load circle members
+  // Auto-updating data with realtime/polling
+  const { data: circleMembers, reload: reloadMembers } = useRealtimePolling(
+    () => supabase
+      .from('circle_members')
+      .select(`
+        *,
+        member:profiles!member_id(id, full_name, avatar, city, state)
+      `)
+      .eq('user_id', user?.id)
+      .eq('status', 'active')
+      .order('joined_at', { ascending: false }),
+    { 
+      table: 'circle_members',
+      pollInterval: 15000,
+      enabled: activeTab === 'members'
+    }
+  );
+
+  const { data: messages, reload: reloadMessages } = useRealtimePolling(
+    () => supabase
+      .from('circle_chat_messages')
+      .select(`
+        *,
+        sender:profiles!sender_id(full_name, avatar)
+      `)
+      .eq('user_id', user?.id)
+      .order('created_at', { ascending: true }),
+    { 
+      table: 'circle_chat_messages',
+      pollInterval: 5000,
+      enabled: activeTab === 'chat'
+    }
+  );
+
+  const { data: checkIns, reload: reloadCheckIns } = useRealtimePolling(
+    () => supabase
+      .from('check_ins')
+      .select(`
+        *,
+        user:profiles!user_id(full_name, avatar)
+      `)
+      .in('user_id', [user?.id, ...(circleMembers?.map(m => m.member_id) || [])])
+      .order('created_at', { ascending: false })
+      .limit(20),
+    { 
+      table: 'check_ins',
+      pollInterval: 10000,
+      enabled: activeTab === 'checkins'
+    }
+  );
+
+  const { data: supportRequests, reload: reloadSupportRequests } = useRealtimePolling(
+    () => supabase
+      .from('support_requests')
+      .select(`
+        *,
+        requester:profiles!user_id(full_name, avatar)
+      `)
+      .in('user_id', circleMembers?.map(m => m.member_id) || [])
+      .eq('status', 'active')
+      .order('created_at', { ascending: false }),
+    { 
+      table: 'support_requests',
+      pollInterval: 15000,
+      enabled: activeTab === 'support'
+    }
+  );
+
+  // Scroll to bottom of chat
   useEffect(() => {
-    if (user?.id) {
-      loadCircleMembers();
+    if (activeTab === 'chat' && messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [user]);
+  }, [messages, activeTab]);
 
-  const loadCircleMembers = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('circle_members')
-        .select(`
-          *,
-          member:profiles!member_id(id, full_name, avatar, city, state)
-        `)
-        .eq('user_id', user?.id)
-        .eq('status', 'active')
-        .order('joined_at', { ascending: false });
-
-      if (error) throw error;
-      setCircleMembers(data || []);
-    } catch (error) {
-      console.error('Error loading circle members:', error);
-    }
-  };
-
-  // Send invitation
+  // Send Invitation
   const handleSendInvitation = async () => {
     if (!inviteEmail.trim() || !user?.id) return;
 
     setSending(true);
     try {
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('circle_invitations')
         .insert({
           inviter_id: user.id,
@@ -57,9 +133,7 @@ export function CircleSection() {
           message: inviteMessage.trim() || null,
           status: 'pending',
           expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
-        })
-        .select()
-        .maybeSingle();
+        });
 
       if (error) throw error;
 
@@ -75,11 +149,109 @@ export function CircleSection() {
     }
   };
 
+  // Send Chat Message
+  const handleSendMessage = async () => {
+    if (!newMessage.trim() || !user?.id) return;
+
+    setSendingMessage(true);
+    try {
+      const { error } = await supabase
+        .from('circle_chat_messages')
+        .insert({
+          user_id: user.id,
+          sender_id: user.id,
+          content: newMessage.trim(),
+          created_at: new Date().toISOString()
+        });
+
+      if (error) throw error;
+
+      setNewMessage('');
+      reloadMessages();
+    } catch (error) {
+      console.error('Error sending message:', error);
+      alert('Failed to send message');
+    } finally {
+      setSendingMessage(false);
+    }
+  };
+
+  // Submit Check-in
+  const handleSubmitCheckIn = async () => {
+    if (!checkInText.trim() || !checkInMood || !user?.id) return;
+
+    setSubmittingCheckIn(true);
+    try {
+      const { error } = await supabase
+        .from('check_ins')
+        .insert({
+          user_id: user.id,
+          content: checkInText.trim(),
+          mood: checkInMood,
+          created_at: new Date().toISOString()
+        });
+
+      if (error) throw error;
+
+      alert('✅ Check-in submitted!');
+      setCheckInText('');
+      setCheckInMood(null);
+      reloadCheckIns();
+    } catch (error) {
+      console.error('Error submitting check-in:', error);
+      alert('Failed to submit check-in');
+    } finally {
+      setSubmittingCheckIn(false);
+    }
+  };
+
+  // Submit Support Request
+  const handleSubmitSupportRequest = async () => {
+    if (!supportCategory || !supportMessage.trim() || !user?.id) return;
+
+    setSubmittingSupportRequest(true);
+    try {
+      const { error } = await supabase
+        .from('support_requests')
+        .insert({
+          user_id: user.id,
+          category: supportCategory,
+          message: supportMessage.trim(),
+          status: 'active',
+          created_at: new Date().toISOString()
+        });
+
+      if (error) throw error;
+
+      alert('✅ Support request sent to your circle!');
+      setShowSupportModal(false);
+      setSupportCategory('');
+      setSupportMessage('');
+      reloadSupportRequests();
+    } catch (error) {
+      console.error('Error submitting support request:', error);
+      alert('Failed to submit support request');
+    } finally {
+      setSubmittingSupportRequest(false);
+    }
+  };
+
+  // Mood emoji helper
+  const getMoodEmoji = (mood: string) => {
+    const moods: Record<string, string> = {
+      great: '😄',
+      good: '🙂',
+      okay: '😐',
+      struggling: '😔'
+    };
+    return moods[mood] || '🙂';
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="bg-gradient-to-r from-[#1a2332] to-[#2d3e50] rounded-xl p-6 text-white">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-4">
           <div>
             <h1 className="text-3xl font-bold mb-2">My Accountability Circle</h1>
             <p className="text-gray-300">
@@ -87,51 +259,74 @@ export function CircleSection() {
             </p>
           </div>
           
-          {/* ✅ PROMINENT INVITE BUTTON */}
-          <button
-            onClick={() => setShowInviteModal(true)}
-            className="flex items-center gap-2 bg-white text-[#1a2332] px-6 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-all shadow-lg"
-          >
-            <UserPlus className="w-5 h-5" />
-            Invite to Circle
-          </button>
+          <div className="flex items-center gap-3">
+            {/* Support Request Button */}
+            <button
+              onClick={() => setShowSupportModal(true)}
+              className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-red-700 transition-all"
+            >
+              <AlertCircle className="w-4 h-4" />
+              Need Support?
+            </button>
+            
+            {/* Invite Button */}
+            <button
+              onClick={() => setShowInviteModal(true)}
+              className="flex items-center gap-2 bg-white text-[#1a2332] px-6 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-all shadow-lg"
+            >
+              <UserPlus className="w-5 h-5" />
+              Invite to Circle
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-white rounded-lg shadow p-4">
           <div className="text-3xl font-bold text-[#1a2332] mb-1">
-            {circleMembers.length}
+            {circleMembers?.length || 0}
           </div>
           <div className="text-sm text-gray-600">Circle Members</div>
         </div>
         <div className="bg-white rounded-lg shadow p-4">
           <div className="text-3xl font-bold text-[#1a2332] mb-1">
-            {messages.length}
+            {messages?.length || 0}
           </div>
-          <div className="text-sm text-gray-600">Messages Sent</div>
+          <div className="text-sm text-gray-600">Messages</div>
+        </div>
+        <div className="bg-white rounded-lg shadow p-4">
+          <div className="text-3xl font-bold text-[#1a2332] mb-1">
+            {checkIns?.length || 0}
+          </div>
+          <div className="text-sm text-gray-600">Check-ins</div>
+        </div>
+        <div className="bg-white rounded-lg shadow p-4">
+          <div className="text-3xl font-bold text-[#1a2332] mb-1">
+            {supportRequests?.length || 0}
+          </div>
+          <div className="text-sm text-gray-600">Support Requests</div>
         </div>
       </div>
 
       {/* Tabs */}
       <div className="bg-white rounded-lg shadow">
         <div className="border-b border-gray-200">
-          <div className="flex">
+          <div className="flex overflow-x-auto">
             <button
               onClick={() => setActiveTab('members')}
-              className={`flex items-center gap-2 px-6 py-3 font-medium ${
+              className={`flex items-center gap-2 px-6 py-3 font-medium whitespace-nowrap ${
                 activeTab === 'members'
                   ? 'border-b-2 border-[#1a2332] text-[#1a2332]'
                   : 'text-gray-500 hover:text-gray-700'
               }`}
             >
               <Users className="w-4 h-4" />
-              Members ({circleMembers.length})
+              Members ({circleMembers?.length || 0})
             </button>
             <button
               onClick={() => setActiveTab('chat')}
-              className={`flex items-center gap-2 px-6 py-3 font-medium ${
+              className={`flex items-center gap-2 px-6 py-3 font-medium whitespace-nowrap ${
                 activeTab === 'chat'
                   ? 'border-b-2 border-[#1a2332] text-[#1a2332]'
                   : 'text-gray-500 hover:text-gray-700'
@@ -140,13 +335,36 @@ export function CircleSection() {
               <MessageCircle className="w-4 h-4" />
               Chat
             </button>
+            <button
+              onClick={() => setActiveTab('checkins')}
+              className={`flex items-center gap-2 px-6 py-3 font-medium whitespace-nowrap ${
+                activeTab === 'checkins'
+                  ? 'border-b-2 border-[#1a2332] text-[#1a2332]'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              Check-ins
+            </button>
+            <button
+              onClick={() => setActiveTab('support')}
+              className={`flex items-center gap-2 px-6 py-3 font-medium whitespace-nowrap ${
+                activeTab === 'support'
+                  ? 'border-b-2 border-[#1a2332] text-[#1a2332]'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <Heart className="w-4 h-4" />
+              Support
+            </button>
           </div>
         </div>
 
         <div className="p-6">
+          {/* MEMBERS TAB */}
           {activeTab === 'members' && (
             <div className="space-y-4">
-              {circleMembers.length > 0 ? (
+              {circleMembers && circleMembers.length > 0 ? (
                 circleMembers.map((member) => (
                   <div
                     key={member.id}
@@ -193,24 +411,187 @@ export function CircleSection() {
             </div>
           )}
 
+          {/* CHAT TAB */}
           {activeTab === 'chat' && (
             <div className="space-y-4">
-              <div className="text-center py-8 text-gray-500">
-                Chat feature coming soon!
+              {/* Messages */}
+              <div className="h-96 overflow-y-auto space-y-3 p-4 bg-gray-50 rounded-lg">
+                {messages && messages.length > 0 ? (
+                  messages.map((message) => (
+                    <div key={message.id} className="flex items-start gap-3">
+                      <img
+                        src={message.sender?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${message.sender_id}`}
+                        alt={message.sender?.full_name || 'User'}
+                        className="w-10 h-10 rounded-full"
+                      />
+                      <div className="flex-1">
+                        <div className="flex items-baseline gap-2">
+                          <span className="font-semibold text-gray-900">
+                            {message.sender?.full_name || 'Unknown'}
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            {new Date(message.created_at).toLocaleTimeString()}
+                          </span>
+                        </div>
+                        <p className="text-gray-700 mt-1">{message.content}</p>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-12 text-gray-500">
+                    No messages yet. Start the conversation!
+                  </div>
+                )}
+                <div ref={messagesEndRef} />
               </div>
+
+              {/* Message Input */}
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                  placeholder="Type your message..."
+                  className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1a2332]"
+                  disabled={sendingMessage}
+                />
+                <button
+                  onClick={handleSendMessage}
+                  disabled={sendingMessage || !newMessage.trim()}
+                  className="bg-[#1a2332] text-white px-6 py-3 rounded-lg hover:bg-[#2d3e50] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  <Send className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* CHECK-INS TAB */}
+          {activeTab === 'checkins' && (
+            <div className="space-y-6">
+              {/* Submit Check-in */}
+              <div className="bg-gray-50 rounded-lg p-6 space-y-4">
+                <h3 className="text-lg font-semibold text-gray-900">How are you doing today?</h3>
+                
+                {/* Mood Selection */}
+                <div className="flex gap-3 flex-wrap">
+                  {(['great', 'good', 'okay', 'struggling'] as const).map((mood) => (
+                    <button
+                      key={mood}
+                      onClick={() => setCheckInMood(mood)}
+                      className={`px-6 py-3 rounded-lg font-medium transition-all ${
+                        checkInMood === mood
+                          ? 'bg-[#1a2332] text-white'
+                          : 'bg-white text-gray-700 hover:bg-gray-100'
+                      }`}
+                    >
+                      {getMoodEmoji(mood)} {mood.charAt(0).toUpperCase() + mood.slice(1)}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Check-in Text */}
+                <textarea
+                  value={checkInText}
+                  onChange={(e) => setCheckInText(e.target.value)}
+                  placeholder="Share what's on your mind..."
+                  rows={4}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1a2332]"
+                  disabled={submittingCheckIn}
+                />
+
+                <button
+                  onClick={handleSubmitCheckIn}
+                  disabled={!checkInText.trim() || !checkInMood || submittingCheckIn}
+                  className="w-full bg-[#1a2332] text-white px-6 py-3 rounded-lg font-semibold hover:bg-[#2d3e50] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {submittingCheckIn ? 'Submitting...' : 'Submit Check-in'}
+                  <CheckCircle2 className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Recent Check-ins */}
+              <div className="space-y-3">
+                <h3 className="text-lg font-semibold text-gray-900">Recent Check-ins</h3>
+                {checkIns && checkIns.length > 0 ? (
+                  checkIns.map((checkIn) => (
+                    <div key={checkIn.id} className="bg-white border border-gray-200 rounded-lg p-4">
+                      <div className="flex items-start gap-3">
+                        <img
+                          src={checkIn.user?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${checkIn.user_id}`}
+                          alt={checkIn.user?.full_name || 'User'}
+                          className="w-10 h-10 rounded-full"
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-baseline gap-2 mb-1">
+                            <span className="font-semibold text-gray-900">
+                              {checkIn.user?.full_name || 'Unknown'}
+                            </span>
+                            <span className="text-2xl">{getMoodEmoji(checkIn.mood)}</span>
+                            <span className="text-xs text-gray-500">
+                              {new Date(checkIn.created_at).toLocaleString()}
+                            </span>
+                          </div>
+                          <p className="text-gray-700">{checkIn.content}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    No check-ins yet. Be the first to share!
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* SUPPORT TAB */}
+          {activeTab === 'support' && (
+            <div className="space-y-4">
+              {supportRequests && supportRequests.length > 0 ? (
+                supportRequests.map((request) => (
+                  <div key={request.id} className="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <div className="flex items-start gap-3">
+                      <img
+                        src={request.requester?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${request.user_id}`}
+                        alt={request.requester?.full_name || 'User'}
+                        className="w-10 h-10 rounded-full"
+                      />
+                      <div className="flex-1">
+                        <div className="flex items-baseline gap-2 mb-1">
+                          <span className="font-semibold text-gray-900">
+                            {request.requester?.full_name || 'Unknown'}
+                          </span>
+                          <span className="text-xs px-2 py-1 bg-red-200 text-red-800 rounded-full">
+                            {request.category}
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            {new Date(request.created_at).toLocaleString()}
+                          </span>
+                        </div>
+                        <p className="text-gray-700">{request.message}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-12 text-gray-500">
+                  No active support requests
+                </div>
+              )}
             </div>
           )}
         </div>
       </div>
 
-      {/* ✅ INVITE MODAL */}
+      {/* INVITE MODAL */}
       {showInviteModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl max-w-md w-full p-6">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-gray-900">
-                Invite to Your Circle
-              </h2>
+              <h2 className="text-2xl font-bold text-gray-900">Invite to Your Circle</h2>
               <button
                 onClick={() => setShowInviteModal(false)}
                 className="text-gray-400 hover:text-gray-600"
@@ -220,7 +601,6 @@ export function CircleSection() {
             </div>
 
             <div className="space-y-4">
-              {/* Email Input */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Email Address *
@@ -235,7 +615,6 @@ export function CircleSection() {
                 />
               </div>
 
-              {/* Personal Message */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Personal Message (Optional)
@@ -250,18 +629,15 @@ export function CircleSection() {
                 />
               </div>
 
-              {/* Info Box */}
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                 <p className="text-sm text-blue-800">
-                  <strong>They'll receive:</strong>
-                  <br />
-                  • Email invitation with your personal message
-                  • In-app notification
+                  <strong>They'll receive:</strong><br />
+                  • Email invitation with your personal message<br />
+                  • In-app notification<br />
                   • Link to accept and join your circle
                 </p>
               </div>
 
-              {/* Action Buttons */}
               <div className="flex gap-3">
                 <button
                   onClick={() => setShowInviteModal(false)}
@@ -275,17 +651,85 @@ export function CircleSection() {
                   disabled={!inviteEmail.trim() || sending}
                   className="flex-1 px-4 py-3 bg-[#1a2332] text-white rounded-lg hover:bg-[#2d3e50] font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
-                  {sending ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
-                      Sending...
-                    </>
-                  ) : (
-                    <>
-                      <Send className="w-4 h-4" />
-                      Send Invitation
-                    </>
-                  )}
+                  {sending ? 'Sending...' : 'Send Invitation'}
+                  <Send className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SUPPORT REQUEST MODAL */}
+      {showSupportModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-md w-full p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-gray-900">Request Support</h2>
+              <button
+                onClick={() => setShowSupportModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Category *
+                </label>
+                <select
+                  value={supportCategory}
+                  onChange={(e) => setSupportCategory(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1a2332]"
+                  disabled={submittingSupportRequest}
+                >
+                  <option value="">Select a category</option>
+                  <option value="motivation">Need Motivation</option>
+                  <option value="accountability">Breaking Commitment</option>
+                  <option value="advice">Need Advice</option>
+                  <option value="struggle">Personal Struggle</option>
+                  <option value="celebration">Want to Celebrate</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Message *
+                </label>
+                <textarea
+                  value={supportMessage}
+                  onChange={(e) => setSupportMessage(e.target.value)}
+                  placeholder="Tell your circle what you need..."
+                  rows={4}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1a2332]"
+                  disabled={submittingSupportRequest}
+                />
+              </div>
+
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <p className="text-sm text-yellow-800">
+                  Your circle will be notified immediately and can respond with support and encouragement.
+                </p>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowSupportModal(false)}
+                  className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
+                  disabled={submittingSupportRequest}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSubmitSupportRequest}
+                  disabled={!supportCategory || !supportMessage.trim() || submittingSupportRequest}
+                  className="flex-1 px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {submittingSupportRequest ? 'Sending...' : 'Send Request'}
+                  <AlertCircle className="w-4 h-4" />
                 </button>
               </div>
             </div>
@@ -295,3 +739,4 @@ export function CircleSection() {
     </div>
   );
 }
+
