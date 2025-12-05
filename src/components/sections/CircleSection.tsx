@@ -1,5 +1,5 @@
-// CircleSection.tsx - FIXED to use "message" field (not "content")
-// Your table structure: id, circle_id (nullable), sender_id, message, created_at, edited_at, deleted_at, content
+// CircleSection.tsx - FINAL FIX
+// Uses: message (not content), support_type (not category)
 
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -44,7 +44,7 @@ export function CircleSection() {
   
   // Support Request State
   const [showSupportModal, setShowSupportModal] = useState(false);
-  const [supportCategory, setSupportCategory] = useState('');
+  const [supportType, setSupportType] = useState(''); // Changed from supportCategory to supportType
   const [supportMessage, setSupportMessage] = useState('');
   const [submittingSupportRequest, setSubmittingSupportRequest] = useState(false);
 
@@ -87,7 +87,6 @@ export function CircleSection() {
       
       setCircleMembers(data || []);
       
-      // Load profiles for members
       if (data && data.length > 0) {
         const memberIds = data.map(m => m.member_id);
         await loadProfiles(memberIds);
@@ -97,7 +96,7 @@ export function CircleSection() {
     }
   };
 
-  // Load messages - Uses "message" field, not "content"
+  // Load messages
   const loadMessages = async () => {
     try {
       const memberIds = circleMembers.map(m => m.member_id);
@@ -112,14 +111,13 @@ export function CircleSection() {
         .from('circle_chat_messages')
         .select('*')
         .in('sender_id', allUserIds)
-        .is('deleted_at', null) // Don't show deleted messages
+        .is('deleted_at', null)
         .order('created_at', { ascending: true });
 
       if (error) throw error;
       
       setMessages(data || []);
       
-      // Load profiles for senders
       if (data && data.length > 0) {
         const senderIds = [...new Set(data.map(m => m.sender_id))];
         await loadProfiles(senderIds);
@@ -277,20 +275,18 @@ export function CircleSection() {
     }
   };
 
-  // Send Chat Message - FIXED: Uses "message" field (not "content")
+  // Send Chat Message - Uses "message" field
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !user?.id) return;
 
     setSendingMessage(true);
     try {
-      // Use "message" field (not "content")
       const { error } = await supabase
         .from('circle_chat_messages')
         .insert({
           sender_id: user.id,
-          message: newMessage.trim(), // ✅ Using "message" field
+          message: newMessage.trim(),
           created_at: new Date().toISOString()
-          // circle_id is now nullable, so we don't need to provide it
         });
 
       if (error) throw error;
@@ -334,9 +330,9 @@ export function CircleSection() {
     }
   };
 
-  // Submit Support Request
+  // Submit Support Request - FIXED: Uses "support_type" instead of "category"
   const handleSubmitSupportRequest = async () => {
-    if (!supportCategory || !supportMessage.trim() || !user?.id) return;
+    if (!supportType || !supportMessage.trim() || !user?.id) return;
 
     setSubmittingSupportRequest(true);
     try {
@@ -344,7 +340,7 @@ export function CircleSection() {
         .from('support_requests')
         .insert({
           user_id: user.id,
-          category: supportCategory,
+          support_type: supportType, // ✅ Changed from "category" to "support_type"
           message: supportMessage.trim(),
           status: 'active',
           created_at: new Date().toISOString()
@@ -354,7 +350,7 @@ export function CircleSection() {
 
       alert('✅ Support request sent!');
       setShowSupportModal(false);
-      setSupportCategory('');
+      setSupportType('');
       setSupportMessage('');
       await loadSupportRequests();
     } catch (error: any) {
@@ -687,7 +683,7 @@ export function CircleSection() {
                           <div className="flex items-baseline gap-2 mb-1">
                             <span className="font-semibold text-gray-900">{profile.full_name}</span>
                             <span className="text-xs px-2 py-1 bg-red-200 text-red-800 rounded-full">
-                              {request.category}
+                              {request.support_type}
                             </span>
                             <span className="text-xs text-gray-500">
                               {new Date(request.created_at).toLocaleString()}
@@ -772,7 +768,7 @@ export function CircleSection() {
         </div>
       )}
 
-      {/* Support Modal */}
+      {/* Support Modal - FIXED: Uses supportType state */}
       {showSupportModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl max-w-md w-full p-6">
@@ -786,8 +782,8 @@ export function CircleSection() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Category *</label>
                 <select
-                  value={supportCategory}
-                  onChange={(e) => setSupportCategory(e.target.value)}
+                  value={supportType}
+                  onChange={(e) => setSupportType(e.target.value)}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1a2332]"
                   disabled={submittingSupportRequest}
                 >
@@ -826,7 +822,7 @@ export function CircleSection() {
                 </button>
                 <button
                   onClick={handleSubmitSupportRequest}
-                  disabled={!supportCategory || !supportMessage.trim() || submittingSupportRequest}
+                  disabled={!supportType || !supportMessage.trim() || submittingSupportRequest}
                   className="flex-1 px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {submittingSupportRequest ? 'Sending...' : 'Send Request'}
