@@ -8,17 +8,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { PasswordStrengthIndicator } from '@/components/auth/PasswordStrengthIndicator';
 import { useToast } from '@/hooks/use-toast';
-import { 
-  CheckCircle2, 
-  AlertCircle, 
-  Mail, 
-  Lock, 
-  Loader2, 
-  Eye, 
-  EyeOff,
-  ArrowLeft,
-  CheckCircle
-} from 'lucide-react';
+import { CheckCircle2, AlertCircle, Mail, Lock, Loader2, Eye, EyeOff, Shield } from 'lucide-react';
 
 export default function ResetPassword() {
   const [searchParams] = useSearchParams();
@@ -26,44 +16,39 @@ export default function ResetPassword() {
   const { resetPassword, updatePassword } = useAuth();
   const { toast } = useToast();
   
-  // 🔥 IMPROVED: Check both access_token AND type for better reliability
-  const accessToken = searchParams.get('access_token');
+  // 🔥 IMPROVED: Check for both query params and hash params
+  const accessToken = searchParams.get('access_token') || searchParams.get('token');
   const type = searchParams.get('type');
-  const isUpdateMode = type === 'recovery' && accessToken !== null;
+  const isUpdateMode = (type === 'recovery' || type === 'reset') && accessToken;
   
-  // Form state
+  // Form states
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  
+  // UI states
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
   const [countdown, setCountdown] = useState(5);
   const [resendCooldown, setResendCooldown] = useState(0);
   
-  // 🔥 NEW: Password visibility state
+  // 🔥 NEW: Password visibility toggles
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  
-  // 🔥 NEW: Real-time password validation
-  const [passwordValidation, setPasswordValidation] = useState({
-    length: false,
-    uppercase: false,
-    lowercase: false,
-    number: false,
-    match: false
-  });
 
-  // 🔥 NEW: Log mode for debugging
+  // Log detection for debugging
   useEffect(() => {
     if (isUpdateMode) {
-      console.log('✅ Password reset mode - showing update form');
+      console.log('✅ Password reset mode detected - showing password form');
+      console.log('Token:', accessToken?.substring(0, 20) + '...');
+      console.log('Type:', type);
     } else {
-      console.log('📧 Email request mode - showing email form');
+      console.log('📧 Request mode - showing email form');
     }
-  }, [isUpdateMode]);
+  }, [isUpdateMode, accessToken, type]);
 
-  // Success countdown timer
+  // Countdown timer for redirect after success
   useEffect(() => {
     if (success && isUpdateMode && countdown > 0) {
       const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
@@ -81,17 +66,7 @@ export default function ResetPassword() {
     }
   }, [resendCooldown]);
 
-  // 🔥 NEW: Real-time password validation
-  useEffect(() => {
-    setPasswordValidation({
-      length: password.length >= 8,
-      uppercase: /[A-Z]/.test(password),
-      lowercase: /[a-z]/.test(password),
-      number: /[0-9]/.test(password),
-      match: password === confirmPassword && password.length > 0
-    });
-  }, [password, confirmPassword]);
-
+  // Handle request password reset (send email)
   const handleRequestReset = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -119,6 +94,7 @@ export default function ResetPassword() {
     }
   };
 
+  // Handle resend email
   const handleResendEmail = async () => {
     if (resendCooldown > 0) return;
     
@@ -144,33 +120,34 @@ export default function ResetPassword() {
     }
   };
 
+  // Handle update password
   const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     
-    // 🔥 IMPROVED: Better validation with specific messages
-    if (!passwordValidation.length) {
+    // Validation
+    if (password.length < 8) {
       setError('Password must be at least 8 characters long');
       return;
     }
     
-    if (!passwordValidation.uppercase) {
+    if (password !== confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+    
+    if (!/[A-Z]/.test(password)) {
       setError('Password must contain at least one uppercase letter');
       return;
     }
     
-    if (!passwordValidation.lowercase) {
+    if (!/[a-z]/.test(password)) {
       setError('Password must contain at least one lowercase letter');
       return;
     }
     
-    if (!passwordValidation.number) {
+    if (!/[0-9]/.test(password)) {
       setError('Password must contain at least one number');
-      return;
-    }
-    
-    if (!passwordValidation.match) {
-      setError('Passwords do not match');
       return;
     }
     
@@ -197,7 +174,11 @@ export default function ResetPassword() {
     }
   };
 
-  // Success screen - enhanced design
+  // 🔥 NEW: Password match indicator
+  const passwordsMatch = password && confirmPassword && password === confirmPassword;
+  const passwordsDontMatch = password && confirmPassword && password !== confirmPassword;
+
+  // Success screen (after password update)
   if (success && isUpdateMode) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
@@ -211,7 +192,7 @@ export default function ResetPassword() {
               />
             </div>
             <div className="flex justify-center mb-4">
-              <div className="rounded-full bg-green-100 p-4 shadow-lg">
+              <div className="rounded-full bg-green-100 p-3">
                 <CheckCircle2 className="w-16 h-16 text-green-600" />
               </div>
             </div>
@@ -221,14 +202,14 @@ export default function ResetPassword() {
             </CardDescription>
           </CardHeader>
           <CardContent className="text-center space-y-4">
-            <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-              <p className="text-sm text-gray-700">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <p className="text-sm text-gray-600">
                 Redirecting to login in <span className="font-bold text-indigo-600 text-xl">{countdown}</span> seconds...
               </p>
             </div>
             <Button 
               onClick={() => navigate('/login')} 
-              className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"
+              className="w-full"
               size="lg"
             >
               Go to Login Now
@@ -239,11 +220,12 @@ export default function ResetPassword() {
     );
   }
 
+  // Main reset password form
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
       <Card className="w-full max-w-md shadow-xl">
         <CardHeader className="space-y-6">
-          <div className="flex justify-center mb-6">
+          <div className="flex justify-center">
             <img 
               src="/accountablelogo2_updated.jpg" 
               alt="Accountable Logo" 
@@ -252,9 +234,16 @@ export default function ResetPassword() {
           </div>
           
           <div className="text-center">
-            <CardTitle className="text-2xl font-bold">
-              {isUpdateMode ? 'Set New Password' : 'Reset Password'}
-            </CardTitle>
+            <div className="flex items-center justify-center gap-2 mb-2">
+              {isUpdateMode ? (
+                <Shield className="w-6 h-6 text-indigo-600" />
+              ) : (
+                <Mail className="w-6 h-6 text-indigo-600" />
+              )}
+              <CardTitle className="text-2xl font-bold">
+                {isUpdateMode ? 'Set New Password' : 'Reset Password'}
+              </CardTitle>
+            </div>
             <CardDescription className="mt-2 text-base">
               {isUpdateMode 
                 ? 'Choose a strong password to secure your account' 
@@ -267,65 +256,69 @@ export default function ResetPassword() {
           <CardContent className="space-y-4">
             {/* Error Alert */}
             {error && (
-              <Alert variant="destructive" className="animate-in slide-in-from-top">
+              <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}
             
-            {/* Success Alert for Email */}
+            {/* Success Alert (email sent) */}
             {success && !isUpdateMode && (
-              <Alert className="bg-green-50 border-green-200 animate-in slide-in-from-top">
-                <CheckCircle className="h-4 w-4 text-green-600" />
+              <Alert className="bg-green-50 border-green-200">
+                <Mail className="h-4 w-4 text-green-600" />
                 <AlertDescription className="text-green-800">
-                  <strong>Email sent successfully!</strong>
-                  <p className="mt-2 text-sm">
-                    Check your inbox at <strong>{email}</strong> for reset instructions.
-                  </p>
-                  <div className="mt-3 text-sm">
-                    Didn't receive it? 
-                    <button
-                      type="button"
-                      onClick={handleResendEmail}
-                      disabled={resendCooldown > 0 || loading}
-                      className="ml-1 text-green-700 font-semibold hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Click to resend'}
-                    </button>
+                  <strong>Email sent!</strong> Check your inbox for reset instructions.
+                  <div className="mt-3 text-sm space-y-2">
+                    <p className="font-medium">Check your spam folder if you don't see it.</p>
+                    <p>
+                      Didn't receive it? 
+                      <button
+                        type="button"
+                        onClick={handleResendEmail}
+                        disabled={resendCooldown > 0 || loading}
+                        className="ml-1 text-green-700 font-semibold hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend email'}
+                      </button>
+                    </p>
                   </div>
                 </AlertDescription>
               </Alert>
             )}
             
-            {/* Email Input */}
+            {/* Email Input (Request Mode) */}
             {!isUpdateMode ? (
               <div className="space-y-2">
-                <Label htmlFor="email" className="text-sm font-medium">Email Address</Label>
+                <Label htmlFor="email" className="text-sm font-semibold">
+                  Email Address
+                </Label>
                 <div className="relative">
-                  <Mail className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                  <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                   <Input 
                     id="email" 
                     type="email" 
                     value={email} 
                     onChange={(e) => setEmail(e.target.value)} 
                     className="pl-10 h-11"
-                    placeholder="your.email@example.com"
+                    placeholder="you@example.com"
                     required 
                     disabled={success || loading}
-                    autoFocus
+                    autoComplete="email"
                   />
                 </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  We'll send you a secure link to reset your password
+                <p className="text-xs text-gray-500">
+                  We'll send you a link to reset your password
                 </p>
               </div>
             ) : (
               <>
-                {/* 🔥 NEW: Password Input with Visibility Toggle */}
+                {/* New Password Input (Update Mode) */}
                 <div className="space-y-2">
-                  <Label htmlFor="password" className="text-sm font-medium">New Password</Label>
+                  <Label htmlFor="password" className="text-sm font-semibold">
+                    New Password
+                  </Label>
                   <div className="relative">
-                    <Lock className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                    <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                     <Input 
                       id="password" 
                       type={showPassword ? 'text' : 'password'}
@@ -336,58 +329,49 @@ export default function ResetPassword() {
                       required 
                       minLength={8}
                       disabled={loading}
-                      autoFocus
+                      autoComplete="new-password"
                     />
-                    {/* 🔥 Eye Icon Toggle */}
+                    {/* 🔥 NEW: Password visibility toggle */}
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
                       className="absolute right-3 top-3 text-gray-400 hover:text-gray-600 focus:outline-none"
                       tabIndex={-1}
-                      aria-label={showPassword ? "Hide password" : "Show password"}
                     >
                       {showPassword ? (
-                        <EyeOff className="h-5 w-5" />
+                        <EyeOff className="h-4 w-4" />
                       ) : (
-                        <Eye className="h-5 w-5" />
+                        <Eye className="h-4 w-4" />
                       )}
                     </button>
                   </div>
-                  
-                  {/* Password Strength Indicator */}
                   <PasswordStrengthIndicator password={password} />
-                  
-                  {/* 🔥 NEW: Real-time Password Requirements */}
-                  {password && (
-                    <div className="space-y-2 mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                      <p className="text-xs font-semibold text-gray-700 mb-2">Password Requirements:</p>
-                      <div className="space-y-1.5">
-                        <RequirementItem 
-                          met={passwordValidation.length} 
-                          text="At least 8 characters" 
-                        />
-                        <RequirementItem 
-                          met={passwordValidation.uppercase} 
-                          text="One uppercase letter (A-Z)" 
-                        />
-                        <RequirementItem 
-                          met={passwordValidation.lowercase} 
-                          text="One lowercase letter (a-z)" 
-                        />
-                        <RequirementItem 
-                          met={passwordValidation.number} 
-                          text="One number (0-9)" 
-                        />
-                      </div>
-                    </div>
-                  )}
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs space-y-1">
+                    <p className="font-semibold text-gray-700">Password requirements:</p>
+                    <ul className="space-y-1 text-gray-600">
+                      <li className={password.length >= 8 ? 'text-green-600' : ''}>
+                        • At least 8 characters
+                      </li>
+                      <li className={/[A-Z]/.test(password) ? 'text-green-600' : ''}>
+                        • One uppercase letter
+                      </li>
+                      <li className={/[a-z]/.test(password) ? 'text-green-600' : ''}>
+                        • One lowercase letter
+                      </li>
+                      <li className={/[0-9]/.test(password) ? 'text-green-600' : ''}>
+                        • One number
+                      </li>
+                    </ul>
+                  </div>
                 </div>
 
-                {/* 🔥 NEW: Confirm Password with Visibility Toggle */}
+                {/* Confirm Password Input (Update Mode) */}
                 <div className="space-y-2">
-                  <Label htmlFor="confirmPassword" className="text-sm font-medium">Confirm New Password</Label>
+                  <Label htmlFor="confirmPassword" className="text-sm font-semibold">
+                    Confirm New Password
+                  </Label>
                   <div className="relative">
-                    <Lock className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                    <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                     <Input 
                       id="confirmPassword" 
                       type={showConfirmPassword ? 'text' : 'password'}
@@ -397,39 +381,48 @@ export default function ResetPassword() {
                       placeholder="Confirm new password"
                       required
                       disabled={loading}
+                      autoComplete="new-password"
+                      // 🔥 BEST PRACTICE: Prevent paste on confirm password
+                      onPaste={(e) => {
+                        e.preventDefault();
+                        toast({
+                          title: 'Paste disabled',
+                          description: 'Please type your password to confirm',
+                          variant: 'default'
+                        });
+                      }}
                     />
-                    {/* 🔥 Eye Icon Toggle */}
+                    {/* 🔥 NEW: Confirm password visibility toggle */}
                     <button
                       type="button"
                       onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                       className="absolute right-3 top-3 text-gray-400 hover:text-gray-600 focus:outline-none"
                       tabIndex={-1}
-                      aria-label={showConfirmPassword ? "Hide password" : "Show password"}
                     >
                       {showConfirmPassword ? (
-                        <EyeOff className="h-5 w-5" />
+                        <EyeOff className="h-4 w-4" />
                       ) : (
-                        <Eye className="h-5 w-5" />
+                        <Eye className="h-4 w-4" />
                       )}
                     </button>
                   </div>
                   
-                  {/* 🔥 NEW: Password Match Indicator */}
+                  {/* 🔥 NEW: Password match indicator */}
                   {confirmPassword && (
-                    <div className={`flex items-center gap-2 text-xs mt-2 ${
-                      passwordValidation.match ? 'text-green-600' : 'text-red-600'
+                    <div className={`flex items-center gap-2 text-sm ${
+                      passwordsMatch ? 'text-green-600' : 'text-red-600'
                     }`}>
-                      {passwordValidation.match ? (
+                      {passwordsMatch ? (
                         <>
-                          <CheckCircle className="h-4 w-4" />
-                          <span className="font-medium">Passwords match</span>
+                          <CheckCircle2 className="h-4 w-4" />
+                          <span>Passwords match</span>
                         </>
-                      ) : (
+                      ) : passwordsDontMatch ? (
                         <>
                           <AlertCircle className="h-4 w-4" />
-                          <span className="font-medium">Passwords do not match</span>
+                          <span>Passwords don't match</span>
                         </>
-                      )}
+                      ) : null}
                     </div>
                   )}
                 </div>
@@ -438,13 +431,13 @@ export default function ResetPassword() {
           </CardContent>
 
           <CardFooter className="flex flex-col space-y-3">
-            {/* Submit Button */}
             <Button 
               type="submit" 
-              className="w-full h-11 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 font-semibold"
-              disabled={loading || (success && !isUpdateMode)}
+              className="w-full h-11 font-semibold" 
+              disabled={loading || (success && !isUpdateMode) || (isUpdateMode && passwordsDontMatch)}
+              size="lg"
             >
-              {loading && <Loader2 className="mr-2 h-5 w-5 animate-spin" />}
+              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {loading 
                 ? 'Processing...' 
                 : isUpdateMode 
@@ -453,14 +446,12 @@ export default function ResetPassword() {
                     ? 'Email Sent ✓' 
                     : 'Send Reset Link'}
             </Button>
-
-            {/* Back to Login */}
+            
             <Link 
               to="/login" 
-              className="flex items-center justify-center gap-2 text-sm text-indigo-600 hover:text-indigo-700 hover:underline font-medium w-full"
+              className="text-sm text-indigo-600 hover:text-indigo-700 hover:underline text-center font-medium w-full py-2"
             >
-              <ArrowLeft className="h-4 w-4" />
-              Back to Login
+              ← Back to login
             </Link>
           </CardFooter>
         </form>
@@ -469,18 +460,3 @@ export default function ResetPassword() {
   );
 }
 
-// 🔥 NEW: Helper component for password requirements
-function RequirementItem({ met, text }: { met: boolean; text: string }) {
-  return (
-    <div className={`flex items-center gap-2 text-xs transition-colors ${
-      met ? 'text-green-600' : 'text-gray-500'
-    }`}>
-      {met ? (
-        <CheckCircle className="h-4 w-4 flex-shrink-0" />
-      ) : (
-        <div className="h-4 w-4 rounded-full border-2 border-gray-300 flex-shrink-0" />
-      )}
-      <span className={met ? 'font-medium' : ''}>{text}</span>
-    </div>
-  );
-}
