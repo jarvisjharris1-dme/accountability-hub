@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,18 +8,30 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { PasswordStrengthIndicator } from '@/components/auth/PasswordStrengthIndicator';
 import { useToast } from '@/hooks/use-toast';
-import { CheckCircle2, AlertCircle, Mail, Lock, Loader2, Eye, EyeOff, Shield } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Mail, Lock, Loader2, Eye, EyeOff, Shield, AlertTriangle } from 'lucide-react';
 
 export default function ResetPassword() {
   const [searchParams] = useSearchParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const { resetPassword, updatePassword } = useAuth();
   const { toast } = useToast();
   
-  // 🔥 IMPROVED: Check for both query params and hash params
-  const accessToken = searchParams.get('access_token') || searchParams.get('token');
-  const type = searchParams.get('type');
-  const isUpdateMode = (type === 'recovery' || type === 'reset') && accessToken;
+  // 🔥 FIXED: Check for errors in both query params and hash
+  const hashParams = new URLSearchParams(location.hash.substring(1));
+  const errorFromHash = hashParams.get('error');
+  const errorCode = hashParams.get('error_code');
+  const errorDescription = hashParams.get('error_description');
+  
+  // Check for token in both query and hash
+  const accessToken = 
+    searchParams.get('access_token') || 
+    searchParams.get('token') ||
+    hashParams.get('access_token') ||
+    hashParams.get('token');
+    
+  const type = searchParams.get('type') || hashParams.get('type');
+  const isUpdateMode = (type === 'recovery' || type === 'reset') && accessToken && !errorFromHash;
   
   // Form states
   const [email, setEmail] = useState('');
@@ -33,9 +45,32 @@ export default function ResetPassword() {
   const [countdown, setCountdown] = useState(5);
   const [resendCooldown, setResendCooldown] = useState(0);
   
-  // 🔥 NEW: Password visibility toggles
+  // Password visibility toggles
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  // 🔥 NEW: Handle expired token error
+  useEffect(() => {
+    if (errorFromHash) {
+      console.error('❌ Password reset error:', {
+        error: errorFromHash,
+        code: errorCode,
+        description: errorDescription
+      });
+      
+      if (errorCode === 'otp_expired') {
+        setError('This password reset link has expired. Please request a new one.');
+        toast({
+          title: 'Link Expired',
+          description: 'This password reset link has expired. Please request a new one.',
+          variant: 'destructive',
+          duration: 7000
+        });
+      } else {
+        setError(errorDescription?.replace(/\+/g, ' ') || 'Invalid or expired reset link');
+      }
+    }
+  }, [errorFromHash, errorCode, errorDescription, toast]);
 
   // Log detection for debugging
   useEffect(() => {
@@ -43,10 +78,12 @@ export default function ResetPassword() {
       console.log('✅ Password reset mode detected - showing password form');
       console.log('Token:', accessToken?.substring(0, 20) + '...');
       console.log('Type:', type);
+    } else if (errorFromHash) {
+      console.log('❌ Error detected in URL:', errorFromHash);
     } else {
       console.log('📧 Request mode - showing email form');
     }
-  }, [isUpdateMode, accessToken, type]);
+  }, [isUpdateMode, accessToken, type, errorFromHash]);
 
   // Countdown timer for redirect after success
   useEffect(() => {
@@ -78,8 +115,8 @@ export default function ResetPassword() {
       setResendCooldown(60);
       toast({ 
         title: 'Email sent successfully!', 
-        description: 'Check your inbox for password reset instructions.',
-        duration: 5000
+        description: 'Check your inbox for password reset instructions. Link expires in 1 hour.',
+        duration: 7000
       });
     } catch (err: any) {
       const errorMsg = err.message || 'Failed to send reset email. Please try again.';
@@ -106,8 +143,8 @@ export default function ResetPassword() {
       setResendCooldown(60);
       toast({ 
         title: 'Email resent!', 
-        description: 'Check your inbox again.',
-        duration: 3000
+        description: 'Check your inbox again. Link expires in 1 hour.',
+        duration: 5000
       });
     } catch (err: any) {
       toast({ 
@@ -174,7 +211,7 @@ export default function ResetPassword() {
     }
   };
 
-  // 🔥 NEW: Password match indicator
+  // Password match indicator
   const passwordsMatch = password && confirmPassword && password === confirmPassword;
   const passwordsDontMatch = password && confirmPassword && password !== confirmPassword;
 
@@ -237,6 +274,8 @@ export default function ResetPassword() {
             <div className="flex items-center justify-center gap-2 mb-2">
               {isUpdateMode ? (
                 <Shield className="w-6 h-6 text-indigo-600" />
+              ) : errorFromHash ? (
+                <AlertTriangle className="w-6 h-6 text-orange-600" />
               ) : (
                 <Mail className="w-6 h-6 text-indigo-600" />
               )}
@@ -247,15 +286,33 @@ export default function ResetPassword() {
             <CardDescription className="mt-2 text-base">
               {isUpdateMode 
                 ? 'Choose a strong password to secure your account' 
-                : 'Enter your email and we\'ll send you a reset link'}
+                : errorFromHash
+                  ? 'The reset link has expired. Request a new one below.'
+                  : 'Enter your email and we\'ll send you a reset link'}
             </CardDescription>
           </div>
         </CardHeader>
 
         <form onSubmit={isUpdateMode ? handleUpdatePassword : handleRequestReset}>
           <CardContent className="space-y-4">
+            {/* 🔥 NEW: Expired token warning */}
+            {errorFromHash && errorCode === 'otp_expired' && (
+              <Alert variant="destructive" className="bg-orange-50 border-orange-300">
+                <AlertTriangle className="h-4 w-4 text-orange-600" />
+                <AlertDescription className="text-orange-900">
+                  <strong>Link Expired!</strong>
+                  <p className="mt-2">
+                    Password reset links expire after 1 hour for security. Please request a new link below.
+                  </p>
+                  <p className="mt-2 text-sm">
+                    💡 <strong>Tip:</strong> Click the link in your email within 1 hour of receiving it.
+                  </p>
+                </AlertDescription>
+              </Alert>
+            )}
+            
             {/* Error Alert */}
-            {error && (
+            {error && !errorFromHash && (
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>{error}</AlertDescription>
@@ -268,8 +325,9 @@ export default function ResetPassword() {
                 <Mail className="h-4 w-4 text-green-600" />
                 <AlertDescription className="text-green-800">
                   <strong>Email sent!</strong> Check your inbox for reset instructions.
-                  <div className="mt-3 text-sm space-y-2">
-                    <p className="font-medium">Check your spam folder if you don't see it.</p>
+                  <div className="mt-3 space-y-2 text-sm">
+                    <p className="font-medium">⏰ Link expires in 1 hour - click it soon!</p>
+                    <p className="font-medium">📧 Check your spam folder if you don't see it.</p>
                     <p>
                       Didn't receive it? 
                       <button
@@ -307,7 +365,7 @@ export default function ResetPassword() {
                   />
                 </div>
                 <p className="text-xs text-gray-500">
-                  We'll send you a link to reset your password
+                  We'll send you a link to reset your password (expires in 1 hour)
                 </p>
               </div>
             ) : (
@@ -331,34 +389,29 @@ export default function ResetPassword() {
                       disabled={loading}
                       autoComplete="new-password"
                     />
-                    {/* 🔥 NEW: Password visibility toggle */}
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
                       className="absolute right-3 top-3 text-gray-400 hover:text-gray-600 focus:outline-none"
                       tabIndex={-1}
                     >
-                      {showPassword ? (
-                        <EyeOff className="h-4 w-4" />
-                      ) : (
-                        <Eye className="h-4 w-4" />
-                      )}
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
                   </div>
                   <PasswordStrengthIndicator password={password} />
                   <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs space-y-1">
                     <p className="font-semibold text-gray-700">Password requirements:</p>
                     <ul className="space-y-1 text-gray-600">
-                      <li className={password.length >= 8 ? 'text-green-600' : ''}>
+                      <li className={password.length >= 8 ? 'text-green-600 font-medium' : ''}>
                         • At least 8 characters
                       </li>
-                      <li className={/[A-Z]/.test(password) ? 'text-green-600' : ''}>
+                      <li className={/[A-Z]/.test(password) ? 'text-green-600 font-medium' : ''}>
                         • One uppercase letter
                       </li>
-                      <li className={/[a-z]/.test(password) ? 'text-green-600' : ''}>
+                      <li className={/[a-z]/.test(password) ? 'text-green-600 font-medium' : ''}>
                         • One lowercase letter
                       </li>
-                      <li className={/[0-9]/.test(password) ? 'text-green-600' : ''}>
+                      <li className={/[0-9]/.test(password) ? 'text-green-600 font-medium' : ''}>
                         • One number
                       </li>
                     </ul>
@@ -382,7 +435,6 @@ export default function ResetPassword() {
                       required
                       disabled={loading}
                       autoComplete="new-password"
-                      // 🔥 BEST PRACTICE: Prevent paste on confirm password
                       onPaste={(e) => {
                         e.preventDefault();
                         toast({
@@ -392,22 +444,17 @@ export default function ResetPassword() {
                         });
                       }}
                     />
-                    {/* 🔥 NEW: Confirm password visibility toggle */}
                     <button
                       type="button"
                       onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                       className="absolute right-3 top-3 text-gray-400 hover:text-gray-600 focus:outline-none"
                       tabIndex={-1}
                     >
-                      {showConfirmPassword ? (
-                        <EyeOff className="h-4 w-4" />
-                      ) : (
-                        <Eye className="h-4 w-4" />
-                      )}
+                      {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
                   </div>
                   
-                  {/* 🔥 NEW: Password match indicator */}
+                  {/* Password match indicator */}
                   {confirmPassword && (
                     <div className={`flex items-center gap-2 text-sm ${
                       passwordsMatch ? 'text-green-600' : 'text-red-600'
@@ -415,12 +462,12 @@ export default function ResetPassword() {
                       {passwordsMatch ? (
                         <>
                           <CheckCircle2 className="h-4 w-4" />
-                          <span>Passwords match</span>
+                          <span className="font-medium">Passwords match</span>
                         </>
                       ) : passwordsDontMatch ? (
                         <>
                           <AlertCircle className="h-4 w-4" />
-                          <span>Passwords don't match</span>
+                          <span className="font-medium">Passwords don't match</span>
                         </>
                       ) : null}
                     </div>
@@ -459,4 +506,3 @@ export default function ResetPassword() {
     </div>
   );
 }
-
