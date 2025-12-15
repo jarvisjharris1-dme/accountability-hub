@@ -27,12 +27,10 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
-// 🔥 NEW: AppContent component with Terms enforcement
-function AppContent() {
-  // Check if user needs to accept terms
+// 🔥 FIXED: TermsWrapper component - INSIDE AuthProvider
+function TermsWrapper() {
+  // Now this works because it's INSIDE AuthProvider
   const { needsAcceptance, loading, markAsAccepted } = useTermsEnforcement();
-  
-  // State for Privacy Policy modal
   const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
 
   // Show loading while checking terms status
@@ -49,37 +47,33 @@ function AppContent() {
 
   return (
     <>
-      {/* Your existing app routes */}
-      <BrowserRouter>
-        <AuthProvider>
-          <AdminProvider>
-            <Routes>
-              <Route path="/login" element={<Login />} />
-              <Route path="/signup" element={<Signup />} />
-              <Route path="/verify-email" element={<VerifyEmail />} />
-              <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
-              <Route path="/reset-password" element={<ResetPassword />} />
-              <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
-              <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
-              <Route path="/analytics" element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
-              <Route path="/goals" element={<ProtectedRoute><Goals /></ProtectedRoute>} />
-              <Route path="/achievements" element={<ProtectedRoute><Achievements /></ProtectedRoute>} />
-              <Route path="/admin" element={<ProtectedRoute><AdminRoute><AdminDashboard /></AdminRoute></ProtectedRoute>} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </AdminProvider>
-        </AuthProvider>
-      </BrowserRouter>
+      {/* Your routes */}
+      <AdminProvider>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<Signup />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
+          <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
+          <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+          <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
+          <Route path="/analytics" element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
+          <Route path="/goals" element={<ProtectedRoute><Goals /></ProtectedRoute>} />
+          <Route path="/achievements" element={<ProtectedRoute><Achievements /></ProtectedRoute>} />
+          <Route path="/admin" element={<ProtectedRoute><AdminRoute><AdminDashboard /></AdminRoute></ProtectedRoute>} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </AdminProvider>
 
-      {/* 🔥 NEW: Terms of Service Modal - Shows if user hasn't accepted */}
+      {/* Terms Modal */}
       <TermsOfServiceModal
         isOpen={needsAcceptance}
         onAccept={markAsAccepted}
         onShowPrivacyPolicy={() => setShowPrivacyPolicy(true)}
-        canClose={false}  // User MUST accept to use app
+        canClose={false}
       />
 
-      {/* 🔥 NEW: Privacy Policy Modal - Shows when requested */}
+      {/* Privacy Modal */}
       <PrivacyPolicyModal
         isOpen={showPrivacyPolicy}
         onClose={() => setShowPrivacyPolicy(false)}
@@ -95,7 +89,12 @@ const App = () => (
       <TooltipProvider>
         <Toaster />
         <Sonner />
-        <AppContent />
+        <BrowserRouter>
+          <AuthProvider>
+            {/* 🔥 FIXED: TermsWrapper is now INSIDE AuthProvider */}
+            <TermsWrapper />
+          </AuthProvider>
+        </BrowserRouter>
       </TooltipProvider>
     </QueryClientProvider>
   </ThemeProvider>
