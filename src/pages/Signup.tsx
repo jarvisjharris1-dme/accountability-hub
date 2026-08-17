@@ -30,18 +30,18 @@ export default function Signup() {
       return;
     }
 
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters');
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters');
       return;
     }
 
     setLoading(true);
 
     try {
-      await signUp(email, password, fullName);
-      navigate('/verify-email');
+      const normalizedEmail = email.trim().toLowerCase();
+      await signUp(normalizedEmail, password, fullName);
+      navigate('/verify-email', { state: { email: normalizedEmail } });
     } catch (err: any) {
-      console.error('Signup error:', err);
       setError(err.message || 'Failed to create account. Please try again.');
     } finally {
       setLoading(false);
@@ -53,9 +53,9 @@ export default function Signup() {
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
           <div className="flex justify-center mb-6">
-            <img 
-              src="/accountablelogo2_updated.png" 
-              alt="Accountable Logo" 
+            <img
+              src="/accountablelogo2_updated.png"
+              alt="Accountable Logo"
               className="h-20 w-auto object-contain"
             />
           </div>
@@ -99,6 +99,7 @@ export default function Signup() {
                   placeholder="you@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  autoComplete="email"
                   required
                   className="pl-10"
                 />
@@ -111,10 +112,11 @@ export default function Signup() {
                 <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                 <Input
                   id="password"
-                  type={showPassword ? "text" : "password"}
+                  type={showPassword ? 'text' : 'password'}
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="new-password"
                   required
                   className="pl-10 pr-10"
                 />
@@ -122,13 +124,9 @@ export default function Signup() {
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-3 text-gray-400 hover:text-gray-600 focus:outline-none"
-                  tabIndex={-1}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
-                  {showPassword ? (
-                    <EyeOff className="h-4 w-4" />
-                  ) : (
-                    <Eye className="h-4 w-4" />
-                  )}
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
               <PasswordStrengthIndicator password={password} />
@@ -140,10 +138,11 @@ export default function Signup() {
                 <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                 <Input
                   id="confirmPassword"
-                  type={showConfirmPassword ? "text" : "password"}
+                  type={showConfirmPassword ? 'text' : 'password'}
                   placeholder="••••••••"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
+                  autoComplete="new-password"
                   required
                   className="pl-10 pr-10"
                 />
@@ -151,13 +150,9 @@ export default function Signup() {
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                   className="absolute right-3 top-3 text-gray-400 hover:text-gray-600 focus:outline-none"
-                  tabIndex={-1}
+                  aria-label={showConfirmPassword ? 'Hide password confirmation' : 'Show password confirmation'}
                 >
-                  {showConfirmPassword ? (
-                    <EyeOff className="h-4 w-4" />
-                  ) : (
-                    <Eye className="h-4 w-4" />
-                  )}
+                  {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
             </div>
@@ -186,4 +181,3 @@ export default function Signup() {
     </div>
   );
 }
-
