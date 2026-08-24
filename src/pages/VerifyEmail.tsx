@@ -1,10 +1,43 @@
-import { useNavigate } from 'react-router-dom';
+import { useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { CheckCircle, Mail, ArrowRight } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { useAuth } from '@/contexts/AuthContext';
+import { CheckCircle, Mail, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
+
+interface VerifyEmailLocationState {
+  email?: string;
+}
 
 export default function VerifyEmail() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { resendVerificationEmail } = useAuth();
+  const email = (location.state as VerifyEmailLocationState | null)?.email;
+  const [resending, setResending] = useState(false);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+
+  const handleResend = async () => {
+    if (!email) {
+      navigate('/signup');
+      return;
+    }
+
+    setResending(true);
+    setMessage('');
+    setError('');
+
+    try {
+      await resendVerificationEmail(email);
+      setMessage(`A new verification email was sent to ${email}.`);
+    } catch (err: any) {
+      setError(err.message || 'Unable to resend the verification email. Please try again.');
+    } finally {
+      setResending(false);
+    }
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50 p-4">
@@ -15,73 +48,69 @@ export default function VerifyEmail() {
               <CheckCircle className="w-10 h-10 text-green-600" />
             </div>
           </div>
-          <CardTitle className="text-2xl font-bold">Check Your Email!</CardTitle>
+          <CardTitle className="text-2xl font-bold">Check Your Email</CardTitle>
           <CardDescription>
-            We've sent you a verification link to confirm your account
+            {email
+              ? `We sent a verification link to ${email}.`
+              : 'We sent a verification link to confirm your account.'}
           </CardDescription>
         </CardHeader>
 
         <CardContent className="space-y-6">
-          {/* Email Icon */}
+          {message && (
+            <Alert>
+              <Mail className="h-4 w-4" />
+              <AlertDescription>{message}</AlertDescription>
+            </Alert>
+          )}
+
+          {error && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+
           <div className="flex justify-center">
             <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center">
               <Mail className="w-10 h-10 text-blue-600" />
             </div>
           </div>
 
-          {/* Instructions */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
             <h3 className="font-semibold text-blue-900 mb-3 text-sm">Next Steps:</h3>
             <ol className="space-y-2 text-sm text-blue-800">
-              <li className="flex items-start">
-                <span className="font-semibold mr-2">1.</span>
-                <span>Check your inbox (and spam folder)</span>
-              </li>
-              <li className="flex items-start">
-                <span className="font-semibold mr-2">2.</span>
-                <span>Click the verification link in the email</span>
-              </li>
-              <li className="flex items-start">
-                <span className="font-semibold mr-2">3.</span>
-                <span>You'll be redirected to sign in</span>
-              </li>
-              <li className="flex items-start">
-                <span className="font-semibold mr-2">4.</span>
-                <span>Start your journey! 🚀</span>
-              </li>
+              <li>1. Check your inbox and spam folder.</li>
+              <li>2. Open the Accountable verification email.</li>
+              <li>3. Click the verification link.</li>
+              <li>4. Return to Accountable and sign in.</li>
             </ol>
-          </div>
-
-          {/* Tips */}
-          <div className="bg-gray-50 rounded-lg p-4 text-sm text-gray-600">
-            <p className="font-semibold mb-2">💡 Tips:</p>
-            <ul className="space-y-1 text-xs">
-              <li>• Check your spam/junk folder if you don't see the email</li>
-              <li>• The verification link expires in 24 hours</li>
-              <li>• Make sure to use the same browser when clicking the link</li>
-            </ul>
           </div>
         </CardContent>
 
         <CardFooter className="flex flex-col space-y-3">
-          <Button
-            onClick={() => navigate('/login')}
-            className="w-full"
-            variant="outline"
-          >
+          <Button onClick={() => navigate('/login')} className="w-full">
             Go to Sign In
             <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
 
-          <p className="text-xs text-center text-gray-500">
-            Didn't receive the email?{' '}
-            <button
-              onClick={() => navigate('/signup')}
-              className="text-blue-600 hover:underline font-medium"
-            >
-              Try signing up again
-            </button>
-          </p>
+          <Button
+            onClick={handleResend}
+            className="w-full"
+            variant="outline"
+            disabled={resending}
+          >
+            {resending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Resending...
+              </>
+            ) : email ? (
+              'Resend verification email'
+            ) : (
+              'Return to signup'
+            )}
+          </Button>
         </CardFooter>
       </Card>
     </div>
