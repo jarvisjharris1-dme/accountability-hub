@@ -9,7 +9,7 @@ on:
       - main
 
 jobs:
-  build:
+  android:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -27,9 +27,6 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: gradle
-
-      - name: Verify Java version
-        run: java -version
 
       - name: Install dependencies
         run: npm install
@@ -51,12 +48,13 @@ jobs:
       - name: Sync Android project
         run: npx cap sync android
 
-      - name: Verify Android project
-        run: test -f android/app/build.gradle && test -f android/app/src/main/AndroidManifest.xml
-
       - name: Build Android debug APK
         working-directory: android
         run: ./gradlew assembleDebug
+
+      - name: Build Android release bundle
+        working-directory: android
+        run: ./gradlew bundleRelease
 
       - name: Upload Android debug APK
         uses: actions/upload-artifact@v4
@@ -64,3 +62,54 @@ jobs:
           name: accountable-android-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 14
+
+      - name: Upload Android release AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: accountable-android-release-aab
+          path: android/app/build/outputs/bundle/release/app-release.aab
+          retention-days: 14
+
+  ios:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build web app
+        run: npm run build
+
+      - name: Ensure iOS native project exists
+        run: |
+          if [ ! -d ios ]; then
+            npx cap add ios
+          else
+            echo "iOS project already exists; skipping cap add ios"
+          fi
+
+      - name: Sync iOS project
+        run: npx cap sync ios
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Validate iOS project build without signing
+        working-directory: ios/App
+        run: |
+          xcodebuild \
+            -project App.xcodeproj \
+            -scheme App \
+            -configuration Release \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO \
+            build
