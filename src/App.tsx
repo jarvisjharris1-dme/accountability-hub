@@ -17,6 +17,7 @@ import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import ResetPasswordV2 from "./pages/ResetPasswordV2";
+import AccountDeletion from "./pages/AccountDeletion";
 import Notifications from "./pages/Notifications";
 import Analytics from "./pages/Analytics";
 import Goals from "./pages/Goals";
@@ -50,8 +51,9 @@ function TermsWrapper() {
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/verify-email" element={<VerifyEmail />} />
-          <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
           <Route path="/reset-password" element={<ResetPasswordV2 />} />
+          <Route path="/account-deletion" element={<AccountDeletion />} />
+          <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
           <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
           <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
           <Route path="/analytics" element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
