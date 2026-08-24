@@ -30,8 +30,13 @@ jobs:
       - name: Validate Capacitor config
         run: npx cap config
 
-      - name: Generate Android native project
-        run: npx cap add android
+      - name: Ensure Android native project exists
+        run: |
+          if [ ! -d android ]; then
+            npx cap add android
+          else
+            echo "Android project already exists; skipping cap add android"
+          fi
 
       - name: Sync Android project
         run: npx cap sync android
@@ -39,9 +44,13 @@ jobs:
       - name: Verify Android project
         run: test -f android/app/build.gradle && test -f android/app/src/main/AndroidManifest.xml
 
-      - name: Upload Android native project
+      - name: Build Android debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug
+
+      - name: Upload Android debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: accountable-android-native
-          path: android
+          name: accountable-android-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 14
