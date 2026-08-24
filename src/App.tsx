@@ -8,6 +8,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { AdminProvider } from "@/contexts/AdminContext";
 import { AdminRoute } from "@/components/AdminRoute";
+import { NativeDeepLinkHandler } from '@/components/NativeDeepLinkHandler';
 import { TermsOfServiceModal } from '@/components/TermsOfServiceModal';
 import { PrivacyPolicyModal } from '@/components/PrivacyPolicyModal';
 import { useTermsEnforcement } from '@/hooks/useTermsEnforcement';
@@ -83,6 +84,7 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
+          <NativeDeepLinkHandler />
           <AuthProvider>
             <TermsWrapper />
           </AuthProvider>
