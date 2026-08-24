@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
+import { Capacitor } from '@capacitor/core';
 import { supabase } from '@/lib/supabase';
 
 interface AuthContextType {
@@ -20,12 +21,20 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const getWebBaseUrl = () => {
   const configuredUrl = import.meta.env.VITE_APP_URL?.replace(/\/$/, '');
   if (configuredUrl) return configuredUrl;
+  if (typeof window !== 'undefined') return window.location.origin;
+  return '';
+};
 
-  if (typeof window !== 'undefined') {
-    return window.location.origin;
+const getAuthRedirectUrl = (path: string) => {
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  const configuredMobileScheme = import.meta.env.VITE_MOBILE_URL_SCHEME?.replace(/:\/\/$/, '');
+
+  if (Capacitor.isNativePlatform() && configuredMobileScheme) {
+    return `${configuredMobileScheme}://${normalizedPath.replace(/^\//, '')}`;
   }
 
-  return '';
+  const webBase = getWebBaseUrl();
+  return webBase ? `${webBase}${normalizedPath}` : undefined;
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -40,15 +49,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     let mounted = true;
-
     const initializeAuth = async () => {
       try {
         const { data, error } = await supabase.auth.getSession();
         if (error) throw error;
-
-        if (mounted) {
-          applySession(data.session);
-        }
+        if (mounted) applySession(data.session);
       } catch (error) {
         console.error('Unable to restore authentication session:', error);
         if (mounted) applySession(null);
@@ -58,10 +63,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     void initializeAuth();
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       if (!mounted) return;
       applySession(nextSession);
       setLoading(false);
@@ -74,26 +76,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const signUp = async (email: string, password: string, fullName: string) => {
-    const redirectBase = getWebBaseUrl();
     const { data, error } = await supabase.auth.signUp({
       email: email.trim().toLowerCase(),
       password,
       options: {
-        emailRedirectTo: redirectBase ? `${redirectBase}/login` : undefined,
-        data: {
-          full_name: fullName.trim(),
-        },
+        emailRedirectTo: getAuthRedirectUrl('/login'),
+        data: { full_name: fullName.trim() },
       },
     });
-
     if (error) throw error;
-
-    // Some Supabase projects do not require email confirmation. In that case,
-    // make the authenticated state available immediately instead of waiting for
-    // the auth-state listener to fire.
-    if (data.session) {
-      applySession(data.session);
-    }
+    if (data.session) applySession(data.session);
   };
 
   const signIn = async (email: string, password: string) => {
@@ -103,12 +95,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         email: email.trim().toLowerCase(),
         password,
       });
-
       if (error) throw error;
-
-      // Synchronize state before callers navigate to protected routes. This
-      // prevents a successful login from being redirected back to /login while
-      // React is still waiting for onAuthStateChange.
       applySession(data.session);
     } finally {
       setLoading(false);
@@ -116,10 +103,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signInWithProvider = async (provider: 'google' | 'facebook' | 'github') => {
-    const redirectBase = getWebBaseUrl();
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
-      options: redirectBase ? { redirectTo: redirectBase } : undefined,
+      options: { redirectTo: getAuthRedirectUrl('/') },
     });
     if (error) throw error;
   };
@@ -136,20 +122,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const resetPassword = async (email: string) => {
-    const redirectBase = getWebBaseUrl();
-    const { error } = await supabase.auth.resetPasswordForEmail(
-      email.trim().toLowerCase(),
-      redirectBase ? { redirectTo: `${redirectBase}/reset-password` } : undefined,
-    );
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+      redirectTo: getAuthRedirectUrl('/reset-password'),
+    });
     if (error) throw error;
   };
 
   const resendVerificationEmail = async (email: string) => {
-    const redirectBase = getWebBaseUrl();
     const { error } = await supabase.auth.resend({
       type: 'signup',
       email: email.trim().toLowerCase(),
-      options: redirectBase ? { emailRedirectTo: `${redirectBase}/login` } : undefined,
+      options: { emailRedirectTo: getAuthRedirectUrl('/login') },
     });
     if (error) throw error;
   };
@@ -157,27 +140,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updatePassword = async (newPassword: string) => {
     const { data, error } = await supabase.auth.updateUser({ password: newPassword });
     if (error) throw error;
-
-    if (data.user) {
-      setUser(data.user);
-    }
+    if (data.user) setUser(data.user);
   };
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        session,
-        loading,
-        signUp,
-        signIn,
-        signInWithProvider,
-        signOut,
-        resetPassword,
-        updatePassword,
-        resendVerificationEmail,
-      }}
-    >
+    <AuthContext.Provider value={{ user, session, loading, signUp, signIn, signInWithProvider, signOut, resetPassword, updatePassword, resendVerificationEmail }}>
       {children}
     </AuthContext.Provider>
   );
