@@ -15,7 +15,7 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
-import ResetPassword from "./pages/ResetPassword";
+import ResetPasswordV2 from "./pages/ResetPasswordV2";
 import Notifications from "./pages/Notifications";
 import Analytics from "./pages/Analytics";
 import Goals from "./pages/Goals";
@@ -27,13 +27,10 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
-// 🔥 FIXED: TermsWrapper component - INSIDE AuthProvider
 function TermsWrapper() {
-  // Now this works because it's INSIDE AuthProvider
   const { needsAcceptance, loading, markAsAccepted } = useTermsEnforcement();
   const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
 
-  // Show loading while checking terms status
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-[#1a2332] to-[#2d3e50]">
@@ -47,14 +44,13 @@ function TermsWrapper() {
 
   return (
     <>
-      {/* Your routes */}
       <AdminProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/verify-email" element={<VerifyEmail />} />
           <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
-          <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/reset-password" element={<ResetPasswordV2 />} />
           <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
           <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
           <Route path="/analytics" element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
@@ -65,7 +61,6 @@ function TermsWrapper() {
         </Routes>
       </AdminProvider>
 
-      {/* Terms Modal */}
       <TermsOfServiceModal
         isOpen={needsAcceptance}
         onAccept={markAsAccepted}
@@ -73,7 +68,6 @@ function TermsWrapper() {
         canClose={false}
       />
 
-      {/* Privacy Modal */}
       <PrivacyPolicyModal
         isOpen={showPrivacyPolicy}
         onClose={() => setShowPrivacyPolicy(false)}
@@ -82,7 +76,6 @@ function TermsWrapper() {
   );
 }
 
-// Main App component
 const App = () => (
   <ThemeProvider defaultTheme="light">
     <QueryClientProvider client={queryClient}>
@@ -91,7 +84,6 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <AuthProvider>
-            {/* 🔥 FIXED: TermsWrapper is now INSIDE AuthProvider */}
             <TermsWrapper />
           </AuthProvider>
         </BrowserRouter>
@@ -101,4 +93,3 @@ const App = () => (
 );
 
 export default App;
-
