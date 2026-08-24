@@ -29,3 +29,19 @@ jobs:
 
       - name: Validate Capacitor config
         run: npx cap config
+
+      - name: Generate Android native project
+        run: npx cap add android
+
+      - name: Sync Android project
+        run: npx cap sync android
+
+      - name: Verify Android project
+        run: test -f android/app/build.gradle && test -f android/app/src/main/AndroidManifest.xml
+
+      - name: Upload Android native project
+        uses: actions/upload-artifact@v4
+        with:
+          name: accountable-android-native
+          path: android
+          retention-days: 14
