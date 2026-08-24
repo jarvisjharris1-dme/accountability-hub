@@ -17,6 +17,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: release/accountable-1.0
+          fetch-depth: 0
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -30,16 +31,20 @@ jobs:
       - name: Build web app
         run: npm run build
 
-      - name: Add iOS project
+      - name: Ensure iOS project exists
         run: |
           if [ ! -d ios ]; then
             npx cap add ios
+          else
+            echo "iOS project already exists; skipping cap add ios"
           fi
 
-      - name: Add Android project
+      - name: Ensure Android project exists
         run: |
           if [ ! -d android ]; then
             npx cap add android
+          else
+            echo "Android project already exists; skipping cap add android"
           fi
 
       - name: Sync native projects
@@ -54,5 +59,6 @@ jobs:
             echo "No native changes to commit"
           else
             git commit -m "Generate native iOS and Android projects"
+            git pull --rebase origin release/accountable-1.0
             git push origin HEAD:release/accountable-1.0
           fi
