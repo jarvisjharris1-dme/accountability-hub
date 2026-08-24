@@ -1,0 +1,58 @@
+name: Generate Accountable Native Projects
+
+on:
+  push:
+    branches:
+      - release/accountable-1.0
+
+permissions:
+  contents: write
+
+jobs:
+  generate-native:
+    if: ${{ !contains(github.event.head_commit.message, 'Generate native iOS and Android projects') }}
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: release/accountable-1.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build web app
+        run: npm run build
+
+      - name: Add iOS project
+        run: |
+          if [ ! -d ios ]; then
+            npx cap add ios
+          fi
+
+      - name: Add Android project
+        run: |
+          if [ ! -d android ]; then
+            npx cap add android
+          fi
+
+      - name: Sync native projects
+        run: npx cap sync
+
+      - name: Commit generated native projects
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ios android package-lock.json
+          if git diff --cached --quiet; then
+            echo "No native changes to commit"
+          else
+            git commit -m "Generate native iOS and Android projects"
+            git push origin HEAD:release/accountable-1.0
+          fi
