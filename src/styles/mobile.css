@@ -73,6 +73,15 @@ nav.fixed.bottom-0 {
   padding-right: var(--safe-area-right);
 }
 
+/* Anchor to the dynamic viewport rather than iOS's fixed-bottom inset. */
+@supports (height: 100dvh) {
+  nav.fixed.bottom-0 {
+    top: 100dvh;
+    bottom: auto;
+    transform: translateY(-100%);
+  }
+}
+
 /* Keep the last page content above the navigation and home indicator. */
 .min-h-screen.pb-24 {
   padding-bottom: calc(6rem + var(--safe-area-bottom));
