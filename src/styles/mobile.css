@@ -66,9 +66,16 @@ body {
   }
 }
 
-/* Fixed bottom nav with safe area */
+/* Keep the bar at the viewport edge; safe-area padding belongs inside it. */
 nav.fixed.bottom-0 {
-  bottom: var(--safe-area-bottom);
+  bottom: 0;
+  padding-left: var(--safe-area-left);
+  padding-right: var(--safe-area-right);
+}
+
+/* Keep the last page content above the navigation and home indicator. */
+.min-h-screen.pb-24 {
+  padding-bottom: calc(6rem + var(--safe-area-bottom));
 }
 
 /* Fixed support button with safe area */
