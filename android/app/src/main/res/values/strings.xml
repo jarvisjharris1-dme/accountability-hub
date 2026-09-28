@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Accountable</string>
+    <string name="title_activity_main">Accountable</string>
+    <string name="package_name">com.accountableapp.accountable</string>
+    <string name="custom_url_scheme">com.accountableapp.accountable</string>
+</resources>

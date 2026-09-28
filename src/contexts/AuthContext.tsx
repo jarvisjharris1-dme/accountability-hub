@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { User, Session } from '@supabase/supabase-js';
+import { Session, User } from '@supabase/supabase-js';
+import { Capacitor } from '@capacitor/core';
 import { supabase } from '@/lib/supabase';
 
 interface AuthContextType {
@@ -17,95 +18,133 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const getWebBaseUrl = () => {
+  const configuredUrl = import.meta.env.VITE_APP_URL?.replace(/\/$/, '');
+  if (configuredUrl) return configuredUrl;
+  if (typeof window !== 'undefined') return window.location.origin;
+  return '';
+};
+
+const getAuthRedirectUrl = (path: string) => {
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  const configuredMobileScheme = import.meta.env.VITE_MOBILE_URL_SCHEME?.replace(/:\/\/$/, '');
+
+  if (Capacitor.isNativePlatform() && configuredMobileScheme) {
+    return `${configuredMobileScheme}://${normalizedPath.replace(/^\//, '')}`;
+  }
+
+  const webBase = getWebBaseUrl();
+  return webBase ? `${webBase}${normalizedPath}` : undefined;
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const applySession = (nextSession: Session | null) => {
+    setSession(nextSession);
+    setUser(nextSession?.user ?? null);
+  };
+
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
+    let mounted = true;
+    const initializeAuth = async () => {
+      try {
+        const { data, error } = await supabase.auth.getSession();
+        if (error) throw error;
+        if (mounted) applySession(data.session);
+      } catch (error) {
+        console.error('Unable to restore authentication session:', error);
+        if (mounted) applySession(null);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+
+    void initializeAuth();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      if (!mounted) return;
+      applySession(nextSession);
       setLoading(false);
     });
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      console.log('Auth state change:', _event);
-      
-      setSession(session);
-      setUser(session?.user ?? null);
-    });
-
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signUp = async (email: string, password: string, fullName: string) => {
-    // ✅ FIXED: Added emailRedirectTo option
     const { data, error } = await supabase.auth.signUp({
-      email,
+      email: email.trim().toLowerCase(),
       password,
-      options: { 
-        // ✅ Redirect to login after email verification
-        emailRedirectTo: `${window.location.origin}/login`,
-        data: { 
-          full_name: fullName 
-        }
-      }
+      options: {
+        emailRedirectTo: getAuthRedirectUrl('/login'),
+        data: { full_name: fullName.trim() },
+      },
     });
-    
     if (error) throw error;
-    
-    // Profile is automatically created by the database trigger
-    // User will be redirected to login page after clicking email verification link
+    if (data.session) applySession(data.session);
   };
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim().toLowerCase(),
+        password,
+      });
+      if (error) throw error;
+      applySession(data.session);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const signInWithProvider = async (provider: 'google' | 'facebook' | 'github') => {
-    const { error } = await supabase.auth.signInWithOAuth({ provider });
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: { redirectTo: getAuthRedirectUrl('/') },
+    });
     if (error) throw error;
   };
 
   const signOut = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      applySession(null);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const resetPassword = async (email: string) => {
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+      redirectTo: getAuthRedirectUrl('/reset-password'),
     });
     if (error) throw error;
   };
 
   const resendVerificationEmail = async (email: string) => {
-    const { error } = await supabase.auth.resend({ type: 'signup', email });
+    const { error } = await supabase.auth.resend({
+      type: 'signup',
+      email: email.trim().toLowerCase(),
+      options: { emailRedirectTo: getAuthRedirectUrl('/login') },
+    });
     if (error) throw error;
   };
 
   const updatePassword = async (newPassword: string) => {
-    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    const { data, error } = await supabase.auth.updateUser({ password: newPassword });
     if (error) throw error;
+    if (data.user) setUser(data.user);
   };
 
   return (
-    <AuthContext.Provider value={{ 
-      user, 
-      session, 
-      loading, 
-      signUp, 
-      signIn, 
-      signInWithProvider, 
-      signOut, 
-      resetPassword, 
-      updatePassword, 
-      resendVerificationEmail 
-    }}>
+    <AuthContext.Provider value={{ user, session, loading, signUp, signIn, signInWithProvider, signOut, resetPassword, updatePassword, resendVerificationEmail }}>
       {children}
     </AuthContext.Provider>
   );
