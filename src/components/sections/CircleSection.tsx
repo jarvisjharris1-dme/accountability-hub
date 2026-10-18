@@ -4,44 +4,44 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { 
-  UserPlus, 
-  Send, 
-  X, 
-  MessageCircle, 
-  Users, 
+import {
+  UserPlus,
+  Send,
+  X,
+  MessageCircle,
+  Users,
   CheckCircle2,
   AlertCircle
 } from 'lucide-react';
 
-export function CircleSection() {
+export function CircleSection({ initialView = 'members' }: { initialView?: 'members' | 'chat' }) {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'members' | 'chat' | 'checkins' | 'support'>('members');
+  const [activeTab, setActiveTab] = useState<'members' | 'chat' | 'checkins' | 'support'>(initialView);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  
+
   // Data State
   const [circleMembers, setCircleMembers] = useState<any[]>([]);
   const [messages, setMessages] = useState<any[]>([]);
   const [checkIns, setCheckIns] = useState<any[]>([]);
   const [supportRequests, setSupportRequests] = useState<any[]>([]);
   const [profiles, setProfiles] = useState<Record<string, any>>({});
-  
+
   // UI State
   const [loading, setLoading] = useState(true);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteMessage, setInviteMessage] = useState('');
   const [sending, setSending] = useState(false);
-  
+
   // Chat State
   const [newMessage, setNewMessage] = useState('');
   const [sendingMessage, setSendingMessage] = useState(false);
-  
+
   // Check-in State
   const [checkInText, setCheckInText] = useState('');
   const [checkInMood, setCheckInMood] = useState<'great' | 'good' | 'okay' | 'struggling' | null>(null);
   const [submittingCheckIn, setSubmittingCheckIn] = useState(false);
-  
+
   // Support Request State
   const [showSupportModal, setShowSupportModal] = useState(false);
   const [supportType, setSupportType] = useState(''); // Changed from supportCategory to supportType
@@ -51,7 +51,7 @@ export function CircleSection() {
   // Load profiles separately
   const loadProfiles = async (userIds: string[]) => {
     if (!userIds.length) return;
-    
+
     try {
       const { data, error } = await supabase
         .from('profiles')
@@ -84,9 +84,9 @@ export function CircleSection() {
         .order('joined_at', { ascending: false });
 
       if (error) throw error;
-      
+
       setCircleMembers(data || []);
-      
+
       if (data && data.length > 0) {
         const memberIds = data.map(m => m.member_id);
         await loadProfiles(memberIds);
@@ -101,7 +101,7 @@ export function CircleSection() {
     try {
       const memberIds = circleMembers.map(m => m.member_id);
       const allUserIds = [user?.id, ...memberIds].filter(Boolean);
-      
+
       if (allUserIds.length === 0) {
         setMessages([]);
         return;
@@ -115,9 +115,9 @@ export function CircleSection() {
         .order('created_at', { ascending: true });
 
       if (error) throw error;
-      
+
       setMessages(data || []);
-      
+
       if (data && data.length > 0) {
         const senderIds = [...new Set(data.map(m => m.sender_id))];
         await loadProfiles(senderIds);
@@ -133,11 +133,11 @@ export function CircleSection() {
       setCheckIns([]);
       return;
     }
-    
+
     try {
       const memberIds = circleMembers.map(m => m.member_id);
       const allUserIds = [user?.id, ...memberIds];
-      
+
       const { data, error } = await supabase
         .from('check_ins')
         .select('*')
@@ -146,9 +146,9 @@ export function CircleSection() {
         .limit(20);
 
       if (error) throw error;
-      
+
       setCheckIns(data || []);
-      
+
       if (data && data.length > 0) {
         const userIds = [...new Set(data.map(c => c.user_id))];
         await loadProfiles(userIds);
@@ -164,10 +164,10 @@ export function CircleSection() {
       setSupportRequests([]);
       return;
     }
-    
+
     try {
       const memberIds = circleMembers.map(m => m.member_id);
-      
+
       const { data, error } = await supabase
         .from('support_requests')
         .select('*')
@@ -176,9 +176,9 @@ export function CircleSection() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      
+
       setSupportRequests(data || []);
-      
+
       if (data && data.length > 0) {
         const userIds = [...new Set(data.map(s => s.user_id))];
         await loadProfiles(userIds);
@@ -199,7 +199,7 @@ export function CircleSection() {
   // Load tab-specific data
   useEffect(() => {
     if (!user?.id) return;
-    
+
     if (activeTab === 'chat') {
       loadMessages();
     } else if (activeTab === 'checkins') {
@@ -212,7 +212,7 @@ export function CircleSection() {
   // Auto-refresh
   useEffect(() => {
     if (!user?.id) return;
-    
+
     const interval = setInterval(() => {
       if (activeTab === 'members') {
         loadCircleMembers();
@@ -272,7 +272,7 @@ export function CircleSection() {
     // Step 2: Call Edge Function to send email
     try {
       console.log('📧 Calling Edge Function with invitation_id:', invitation.id);
-      
+
       const { data: emailData, error: emailError } = await supabase.functions.invoke('send-circle-invitation-email', {
         body: {
           invitation_id: invitation.id
@@ -418,16 +418,8 @@ export function CircleSection() {
               Build meaningful connections and stay accountable together
             </p>
           </div>
-          
+
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => setShowSupportModal(true)}
-              className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-red-700 transition-all"
-            >
-              <AlertCircle className="w-4 h-4" />
-              Need Support?
-            </button>
-            
             <button
               onClick={() => setShowInviteModal(true)}
               className="flex items-center gap-2 bg-white text-[#1a2332] px-6 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-all shadow-lg"
@@ -601,11 +593,13 @@ export function CircleSection() {
                   onChange={(e) => setNewMessage(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
                   placeholder="Type your message..."
-                  className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1a2332]"
+                  aria-label="Circle message"
+                  className="min-w-0 flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1a2332]"
                   disabled={sendingMessage}
                 />
                 <button
                   onClick={handleSendMessage}
+                  aria-label="Send message"
                   disabled={sendingMessage || !newMessage.trim()}
                   className="bg-[#1a2332] text-white px-6 py-3 rounded-lg hover:bg-[#2d3e50] disabled:opacity-50 flex items-center gap-2"
                 >
@@ -620,7 +614,7 @@ export function CircleSection() {
             <div className="space-y-6">
               <div className="bg-gray-50 rounded-lg p-6 space-y-4">
                 <h3 className="text-lg font-semibold text-gray-900">How are you doing today?</h3>
-                
+
                 <div className="flex gap-3 flex-wrap">
                   {(['great', 'good', 'okay', 'struggling'] as const).map((mood) => (
                     <button
@@ -734,8 +728,8 @@ export function CircleSection() {
 
       {/* Invite Modal */}
       {showInviteModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-md w-full p-6">
+        <div className="modal-overlay fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="app-dialog bg-white rounded-xl max-w-md w-full p-5 sm:p-6">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-bold text-gray-900">Invite to Your Circle</h2>
               <button onClick={() => setShowInviteModal(false)} className="text-gray-400 hover:text-gray-600">
@@ -776,7 +770,7 @@ export function CircleSection() {
               <div className="flex gap-3">
                 <button
                   onClick={() => setShowInviteModal(false)}
-                  className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
+                  className="min-w-0 flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
                   disabled={sending}
                 >
                   Cancel
@@ -797,8 +791,8 @@ export function CircleSection() {
 
       {/* Support Modal - FIXED: Uses supportType state */}
       {showSupportModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-md w-full p-6">
+        <div className="modal-overlay fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="app-dialog bg-white rounded-xl max-w-md w-full p-5 sm:p-6">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-bold text-gray-900">Request Support</h2>
               <button onClick={() => setShowSupportModal(false)} className="text-gray-400 hover:text-gray-600">
@@ -836,13 +830,13 @@ export function CircleSection() {
               </div>
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                 <p className="text-sm text-yellow-800">
-                  Your circle will be notified immediately.
+                  Your request will appear in your Circle’s Support section. Responses may not be immediate.
                 </p>
               </div>
               <div className="flex gap-3">
                 <button
                   onClick={() => setShowSupportModal(false)}
-                  className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
+                  className="min-w-0 flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
                   disabled={submittingSupportRequest}
                 >
                   Cancel

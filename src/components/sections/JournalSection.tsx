@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { 
-  BookOpen, 
-  Plus, 
+import {
+  BookOpen,
+  Plus,
   Calendar,
   TrendingUp,
   Smile,
@@ -21,7 +22,7 @@ import {
   Filter,
   ChevronDown
 } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
+import { format, formatDistanceToNow } from 'date-fns';
 
 interface JournalEntry {
   id: string;
@@ -63,12 +64,15 @@ const MOODS = [
   { value: 'crisis', label: 'Crisis', icon: AlertCircle, color: 'red' }
 ];
 
-export function JournalSection() {
+export function JournalSection({ openNew = false }: { openNew?: boolean }) {
   const { user } = useAuth();
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
-  const [showForm, setShowForm] = useState(false);
+  const [showForm, setShowForm] = useState(openNew);
+  const [saving, setSaving] = useState(false);
+  const formRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(true);
+  useEffect(() => { if (showForm && !loading) formRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, [showForm, loading]);
   const [filterStage, setFilterStage] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [streak, setStreak] = useState(0);
@@ -143,17 +147,17 @@ export function JournalSection() {
       if (error) throw error;
 
       let currentStreak = 0;
-      const today = new Date().toISOString().split('T')[0];
+      const today = format(new Date(), 'yyyy-MM-dd');
       const dates = data?.map(e => e.date) || [];
 
       if (dates.includes(today)) {
         currentStreak = 1;
         let checkDate = new Date();
-        
+
         for (let i = 1; i < dates.length; i++) {
           checkDate.setDate(checkDate.getDate() - 1);
-          const dateStr = checkDate.toISOString().split('T')[0];
-          
+          const dateStr = format(checkDate, 'yyyy-MM-dd');
+
           if (dates.includes(dateStr)) {
             currentStreak++;
           } else {
@@ -169,19 +173,21 @@ export function JournalSection() {
   };
 
   const handleSubmit = async () => {
+    if (saving) return;
     if (!user?.id || !formData.content.trim()) {
-      alert('Please write something in your journal entry');
+      toast.error('Write a reflection before saving.');
       return;
     }
 
+    setSaving(true);
     try {
       const stage = STAGES.find(s => s.value === formData.stage);
-      
+
       const { error } = await supabase
         .from('journal_entries')
         .insert({
           user_id: user.id,
-          date: new Date().toISOString().split('T')[0],
+          date: format(new Date(), 'yyyy-MM-dd'),
           stage: formData.stage,
           prompt: stage?.prompt || '',
           content: formData.content,
@@ -195,7 +201,7 @@ export function JournalSection() {
 
       if (error) throw error;
 
-      alert('Journal entry saved! 🎉');
+      toast.success(formData.shared_with_circle ? 'Reflection saved and shared with your Circle.' : 'Your private reflection is saved.');
       setFormData({
         stage: 'awareness',
         content: '',
@@ -211,7 +217,9 @@ export function JournalSection() {
       calculateStreak();
     } catch (error: any) {
       console.error('Error saving entry:', error);
-      alert('Error saving entry: ' + error.message);
+      toast.error('Your reflection could not be saved. Your writing is still here; please try again.');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -229,11 +237,11 @@ export function JournalSection() {
 
   const filteredEntries = entries.filter(entry => {
     const matchesStage = filterStage === 'all' || entry.stage === filterStage;
-    const matchesSearch = searchTerm === '' || 
+    const matchesSearch = searchTerm === '' ||
       entry.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
       entry.wins?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       entry.challenges?.toLowerCase().includes(searchTerm.toLowerCase());
-    
+
     return matchesStage && matchesSearch;
   });
 
@@ -254,9 +262,9 @@ export function JournalSection() {
     <div className="space-y-6">
       {/* Header with Stats */}
       <div className="bg-gradient-to-r from-[#1a2332] to-[#2d3e50] rounded-xl p-6 text-white">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-start justify-between gap-3 flex-wrap mb-4">
           <div>
-            <h1 className="text-3xl font-bold mb-2">My Journal</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold mb-2">Mirror</h1>
             <p className="text-gray-300">Reflect, grow, and track your journey</p>
           </div>
           <button
@@ -269,9 +277,9 @@ export function JournalSection() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-white/10 rounded-lg p-4">
-            <div className="flex items-center gap-3">
+        <div className="grid grid-cols-3 gap-2 sm:gap-4">
+          <div className="bg-white/10 rounded-lg p-2 sm:p-4">
+            <div className="flex flex-wrap items-center gap-2">
               <Flame className="w-8 h-8 text-orange-400" />
               <div>
                 <p className="text-sm text-gray-300">Current Streak</p>
@@ -279,8 +287,8 @@ export function JournalSection() {
               </div>
             </div>
           </div>
-          <div className="bg-white/10 rounded-lg p-4">
-            <div className="flex items-center gap-3">
+          <div className="bg-white/10 rounded-lg p-2 sm:p-4">
+            <div className="flex flex-wrap items-center gap-2">
               <BookOpen className="w-8 h-8 text-blue-400" />
               <div>
                 <p className="text-sm text-gray-300">Total Entries</p>
@@ -288,8 +296,8 @@ export function JournalSection() {
               </div>
             </div>
           </div>
-          <div className="bg-white/10 rounded-lg p-4">
-            <div className="flex items-center gap-3">
+          <div className="bg-white/10 rounded-lg p-2 sm:p-4">
+            <div className="flex flex-wrap items-center gap-2">
               <Calendar className="w-8 h-8 text-green-400" />
               <div>
                 <p className="text-sm text-gray-300">This Month</p>
@@ -297,7 +305,7 @@ export function JournalSection() {
                   {entries.filter(e => {
                     const entryDate = new Date(e.date);
                     const now = new Date();
-                    return entryDate.getMonth() === now.getMonth() && 
+                    return entryDate.getMonth() === now.getMonth() &&
                            entryDate.getFullYear() === now.getFullYear();
                   }).length}
                 </p>
@@ -309,11 +317,13 @@ export function JournalSection() {
 
       {/* New Entry Form */}
       {showForm && (
-        <div className="bg-white rounded-lg shadow-lg p-6">
+        <div ref={formRef} className="entry-form scroll-mt-28 bg-white rounded-lg shadow-lg p-4 sm:p-6">
           <div className="flex justify-between items-center mb-6">
-            <h3 className="text-2xl font-bold text-[#1a2332]">New Journal Entry</h3>
+            <h3 className="text-xl sm:text-2xl font-bold text-[#1a2332]">New reflection</h3>
             <button
               onClick={() => setShowForm(false)}
+              aria-label="Close reflection form"
+              disabled={saving}
               className="text-gray-500 hover:text-gray-700"
             >
               ✕
@@ -343,7 +353,8 @@ export function JournalSection() {
                 value={formData.content}
                 onChange={(e) => setFormData({ ...formData, content: e.target.value })}
                 placeholder="Write your thoughts, reflections, and insights..."
-                rows={6}
+                aria-label="Your reflection"
+                rows={5}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1a2332]"
               />
             </div>
@@ -455,9 +466,10 @@ export function JournalSection() {
             <div className="flex gap-3">
               <button
                 onClick={handleSubmit}
+                disabled={saving || !formData.content.trim()}
                 className="flex-1 bg-[#1a2332] text-white py-3 rounded-lg hover:bg-[#2d3e50] font-semibold"
               >
-                Save Entry
+                {saving ? 'Saving…' : 'Save reflection'}
               </button>
               <button
                 onClick={() => setShowForm(false)}
@@ -505,7 +517,7 @@ export function JournalSection() {
           <BookOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <h3 className="text-xl font-semibold text-gray-700 mb-2">No Entries Yet</h3>
           <p className="text-gray-500 mb-6">
-            {searchTerm || filterStage !== 'all' 
+            {searchTerm || filterStage !== 'all'
               ? 'No entries match your filters. Try adjusting your search.'
               : 'Start your journey by creating your first journal entry!'}
           </p>
@@ -523,21 +535,21 @@ export function JournalSection() {
           {filteredEntries.map((entry) => {
             const stageColor = getStageColor(entry.stage);
             const linkedGoal = goals.find(g => g.id === entry.goal_id);
-            
+
             return (
               <div key={entry.id} className="bg-white rounded-lg shadow hover:shadow-md transition-shadow p-6">
                 <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className={`px-3 py-1 rounded-full text-xs font-semibold bg-${stageColor}-100 text-${stageColor}-800`}>
                       {STAGES.find(s => s.value === entry.stage)?.label}
                     </span>
                     {getMoodIcon(entry.mood)}
                     <span className="text-sm text-gray-500">
-                      {new Date(entry.date).toLocaleDateString('en-US', { 
-                        weekday: 'short', 
-                        year: 'numeric', 
-                        month: 'short', 
-                        day: 'numeric' 
+                      {new Date(entry.date).toLocaleDateString('en-US', {
+                        weekday: 'short',
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric'
                       })}
                     </span>
                     {entry.shared_with_circle && (

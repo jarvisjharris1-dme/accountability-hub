@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { ProfilePhotoUpload } from '@/components/profile/ProfilePhotoUpload';
 
@@ -7,6 +9,8 @@ interface ProfilePhotoStepProps {
 }
 
 export function ProfilePhotoStep({ onNext, onSkip }: ProfilePhotoStepProps) {
+  const { user } = useAuth();
+  const [photo, setPhoto] = useState<string>();
   return (
     <div className="space-y-6">
       <div className="text-center">
@@ -17,7 +21,7 @@ export function ProfilePhotoStep({ onNext, onSkip }: ProfilePhotoStepProps) {
       </div>
       
       <div className="flex justify-center">
-        <ProfilePhotoUpload />
+        {user && <ProfilePhotoUpload userId={user.id} currentPhotoUrl={photo} onPhotoUpdate={setPhoto} userName={user.user_metadata?.full_name} />}
       </div>
 
       <div className="space-y-3">

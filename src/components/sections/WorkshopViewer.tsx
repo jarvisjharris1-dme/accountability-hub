@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { 
-  BookOpen, 
-  Play, 
-  FileText, 
+import {
+  BookOpen,
+  Play,
+  FileText,
   Link as LinkIcon,
   Video,
   Music,
@@ -47,58 +49,44 @@ const STAGES = [
 
 export function WorkshopViewer() {
   const { user } = useAuth();
-  const [selectedStage, setSelectedStage] = useState<string>('Awareness');
+  const [params, setParams] = useSearchParams();
+  const selectedStage = STAGES.some(stage => stage.id === params.get('stage')) ? params.get('stage')! : 'Awareness';
+  const setSelectedStage = (stage: string) => {
+    const next = new URLSearchParams(params);
+    next.set('stage', stage);
+    setParams(next);
+  };
   const [workshops, setWorkshops] = useState<WorkshopContent[]>([]);
   const [progress, setProgress] = useState<Record<string, WorkshopProgress>>({});
   const [selectedWorkshop, setSelectedWorkshop] = useState<WorkshopContent | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    loadWorkshops();
-    loadProgress();
-  }, [user]);
-
-  const loadWorkshops = async () => {
+  const loadContent = async () => {
+    if (!user?.id) return;
+    setLoading(true);
+    setLoadError(false);
     try {
-      const { data, error } = await supabase
-        .from('workshops')  // ✅ FIXED: Changed from 'workshop_content' to 'workshops'
-        .select('*')
-        .eq('is_published', true)  // ✅ ADDED: Only load published workshops
-        .order('order_index', { ascending: true });  // ✅ FIXED: Order by order_index instead of created_at
-
-      if (error) throw error;
-      setWorkshops(data || []);
+      const [contentResult, progressResult] = await Promise.all([
+        supabase.from('workshops').select('*').eq('is_published', true).order('order_index', { ascending: true }),
+        supabase.from('user_workshop_progress').select('*').eq('user_id', user.id),
+      ]);
+      if (contentResult.error) throw contentResult.error;
+      if (progressResult.error) throw progressResult.error;
+      setWorkshops(contentResult.data || []);
+      setProgress(Object.fromEntries((progressResult.data || []).map(item => [item.workshop_id, item])));
     } catch (error) {
       console.error('Error loading workshops:', error);
-    } finally {
-      setLoading(false);
-    }
+      setLoadError(true);
+    } finally { setLoading(false); }
   };
 
-  const loadProgress = async () => {
-    if (!user?.id) return;
-
-    try {
-      const { data, error } = await supabase
-        .from('user_workshop_progress')
-        .select('*')
-        .eq('user_id', user.id);
-
-      if (error) throw error;
-
-      const progressMap: Record<string, WorkshopProgress> = {};
-      data?.forEach(p => {
-        progressMap[p.workshop_id] = p;
-      });
-      setProgress(progressMap);
-    } catch (error) {
-      console.error('Error loading progress:', error);
-    }
-  };
+  useEffect(() => { loadContent(); }, [user?.id]);
 
   const handleStartWorkshop = async (workshop: WorkshopContent) => {
-    if (!user?.id) return;
-
+    if (!user?.id || saving) return;
+    setSaving(true);
     try {
       const { error } = await supabase
         .from('user_workshop_progress')
@@ -112,22 +100,28 @@ export function WorkshopViewer() {
             last_accessed_at: new Date().toISOString()
           },
           {
-            onConflict: 'user_id,workshop_id'
+            onConflict: 'user_id,workshop_id',
+            ignoreDuplicates: true
           }
         );
 
       if (error) throw error;
       setSelectedWorkshop(workshop);
-      loadProgress();
+      setProgress(previous => ({
+        ...previous,
+        [workshop.id]: previous[workshop.id] || { workshop_id: workshop.id, status: 'in_progress', progress_percentage: 0 }
+      }));
     } catch (error: any) {
       console.error('Error starting workshop:', error);
-      alert('Error starting workshop: ' + error.message);
+      toast.error('This workshop could not be opened. Please try again.');
+    } finally {
+      setSaving(false);
     }
   };
 
   const handleCompleteWorkshop = async (workshopId: string) => {
-    if (!user?.id) return;
-
+    if (!user?.id || saving) return;
+    setSaving(true);
     try {
       const { error } = await supabase
         .from('user_workshop_progress')
@@ -146,11 +140,16 @@ export function WorkshopViewer() {
         );
 
       if (error) throw error;
-      alert('🎉 Workshop completed! Great work!');
-      loadProgress();
+      toast.success('Session complete. Keep your next step in view.');
+      setProgress(previous => ({
+        ...previous,
+        [workshopId]: { ...previous[workshopId], workshop_id: workshopId, status: 'completed', progress_percentage: 100 }
+      }));
     } catch (error: any) {
       console.error('Error completing workshop:', error);
-      alert('Error completing workshop: ' + error.message);
+      toast.error('Completion could not be saved. Please try again.');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -178,7 +177,7 @@ export function WorkshopViewer() {
       case 'text':
         return (
           <div className="prose max-w-none">
-            <div className="whitespace-pre-wrap">{workshop.content}</div>
+            <div className="whitespace-pre-wrap leading-relaxed break-words">{workshop.content}</div>
           </div>
         );
 
@@ -258,6 +257,11 @@ export function WorkshopViewer() {
     );
   }
 
+  if (loadError) return <div role="alert" className="bg-white rounded-xl p-6 space-y-4">
+    <p>We could not load the workshops. Please try again.</p>
+    <button onClick={loadContent} className="rounded-lg bg-[#1a2332] text-white px-5 py-3">Try again</button>
+  </div>;
+
   if (selectedWorkshop) {
     const workshopProgress = progress[selectedWorkshop.id];
     const isCompleted = workshopProgress?.status === 'completed';
@@ -274,7 +278,7 @@ export function WorkshopViewer() {
 
         {/* Workshop Header */}
         <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-start justify-between mb-4">
+          <div className="flex items-start justify-between gap-3 flex-wrap mb-4">
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-2">
                 {getContentTypeIcon(selectedWorkshop.content_type)}
@@ -282,7 +286,7 @@ export function WorkshopViewer() {
                   {STAGES.find(s => s.id === selectedWorkshop.stage)?.name}
                 </span>
               </div>
-              <h1 className="text-3xl font-bold text-[#1a2332] mb-2">{selectedWorkshop.title}</h1>
+              <h1 className="text-2xl sm:text-3xl font-bold text-[#1a2332] mb-2">{selectedWorkshop.title}</h1>
               <p className="text-gray-600">{selectedWorkshop.description}</p>
             </div>
             {isCompleted && (
@@ -319,10 +323,11 @@ export function WorkshopViewer() {
             <div className="mt-6 pt-6 border-t">
               <button
                 onClick={() => handleCompleteWorkshop(selectedWorkshop.id)}
+                disabled={saving}
                 className="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 flex items-center justify-center gap-2"
               >
                 <Check className="w-5 h-5" />
-                Mark as Complete
+                {saving ? 'Saving…' : 'Complete session'}
               </button>
             </div>
           )}
@@ -335,21 +340,29 @@ export function WorkshopViewer() {
     <div className="space-y-6">
       {/* Header */}
       <div className="bg-gradient-to-r from-[#1a2332] to-[#2d3e50] rounded-xl p-6 text-white">
-        <h1 className="text-3xl font-bold mb-2">Workshop Library</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold mb-2">Workshops</h1>
         <p className="text-gray-300">Your journey through the 7 stages of personal development</p>
       </div>
 
+      <div className="md:hidden bg-white rounded-lg p-4 shadow-sm">
+        <label htmlFor="workshop-stage" className="block text-sm font-semibold mb-2">Choose your stage</label>
+        <select id="workshop-stage" value={selectedStage} onChange={event => setSelectedStage(event.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-3 bg-white">
+          {STAGES.map(stage => <option key={stage.id} value={stage.id}>{stage.name}</option>)}
+        </select>
+      </div>
+
       {/* Stage Selector */}
-      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-7 gap-3">
+      <div className="hidden md:grid md:grid-cols-3 lg:grid-cols-7 gap-3">
         {STAGES.map((stage) => {
           const stageWorkshopsCount = workshops.filter(w => w.stage === stage.id).length;
-          const completedCount = workshops.filter(w => 
+          const completedCount = workshops.filter(w =>
             w.stage === stage.id && progress[w.id]?.status === 'completed'
           ).length;
 
           return (
             <button
               key={stage.id}
+              aria-pressed={selectedStage === stage.id}
               onClick={() => setSelectedStage(stage.id)}
               className={`p-4 rounded-lg border-2 transition-all ${
                 selectedStage === stage.id
@@ -409,7 +422,7 @@ export function WorkshopViewer() {
                 className="bg-white rounded-lg shadow hover:shadow-lg transition-shadow overflow-hidden"
               >
                 <div className="p-6">
-                  <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-start justify-between gap-3 flex-wrap mb-4">
                     <div className="flex items-center gap-2">
                       {getContentTypeIcon(workshop.content_type)}
                       <span className="text-xs font-medium text-gray-500 uppercase">
@@ -449,6 +462,7 @@ export function WorkshopViewer() {
                   )}
 
                   <button
+                    disabled={saving}
                     onClick={() => {
                       if (!workshopProgress) {
                         handleStartWorkshop(workshop);

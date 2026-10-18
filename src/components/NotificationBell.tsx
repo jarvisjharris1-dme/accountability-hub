@@ -183,6 +183,7 @@ export function NotificationBell() {
       {/* Bell Icon */}
       <button
         onClick={() => setShowDropdown(!showDropdown)}
+        aria-expanded={showDropdown}
         className="relative p-2 rounded-lg hover:bg-gray-100 transition-colors"
         aria-label="Notifications"
         title={usePolling ? 'Notifications (polling mode)' : 'Notifications'}
@@ -208,7 +209,7 @@ export function NotificationBell() {
             onClick={() => setShowDropdown(false)}
           />
 
-          <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-xl border border-gray-200 z-20 max-h-96 overflow-y-auto">
+          <div className="fixed left-4 right-4 sm:absolute sm:left-auto sm:right-0 mt-2 w-auto sm:w-80 bg-white rounded-lg shadow-xl border border-gray-200 z-20 max-h-96 overflow-y-auto">
             <div className="p-4 border-b border-gray-200">
               <div className="flex items-center justify-between">
                 <div>

@@ -1,355 +1,341 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { DashboardSection } from './sections/DashboardSection';
-import { JournalSection } from './sections/JournalSection';
-import { CircleSection } from './sections/CircleSection';
-import { WorkshopViewer } from './sections/WorkshopViewer';
-import { ProfileSection } from './sections/ProfileSection';
-import { MessagingSection } from './sections/MessagingSection';
-import { AdminSection } from './sections/AdminSection';
-import { GoalTracker } from './sections/GoalTracker';
-import NotificationSettings from './sections/NotificationSettings';
-import NotificationPermissionBanner from './ui/NotificationPermissionBanner';
-import { EmailVerificationBanner } from './ui/EmailVerificationBanner';
-import { NotificationBell } from './NotificationBell';
-import { BottomNav } from './navigation/BottomNav';
-import { PWAInstallPrompt } from './ui/PWAInstallPrompt';
-import { UserProfile, AccountabilityArea } from '../types';
-import { supabase } from '@/lib/supabase';
-import { useAuth } from '@/contexts/AuthContext';
-import { LifeBuoy } from 'lucide-react';
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { LifeBuoy, ShieldCheck } from "lucide-react";
+import { toast } from "sonner";
+import { DashboardSection } from "./sections/DashboardSection";
+import { JournalSection } from "./sections/JournalSection";
+import { CircleSection } from "./sections/CircleSection";
+import { WorkshopViewer } from "./sections/WorkshopViewer";
+import { ProfileSection } from "./sections/ProfileSection";
+import { GoalTracker } from "./sections/GoalTracker";
+import NotificationPermissionBanner from "./ui/NotificationPermissionBanner";
+import { EmailVerificationBanner } from "./ui/EmailVerificationBanner";
+import { NotificationBell } from "./NotificationBell";
+import { BottomNav } from "./navigation/BottomNav";
+import { PWAInstallPrompt } from "./ui/PWAInstallPrompt";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "./ui/dialog";
+import { UserProfile, AccountabilityArea } from "../types";
+import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/contexts/AuthContext";
+import { useAdmin } from "@/contexts/AdminContext";
+import { useKeyboardOpen } from "@/hooks/useKeyboardOpen";
 
-interface AppLayoutProps {
-  children?: React.ReactNode;
-}
-
-const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
+const internalTabs = [
+  "dashboard",
+  "journal",
+  "circle",
+  "workshop",
+  "goals",
+  "profile",
+];
+export default function AppLayout({ children }: { children?: ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const [activeTab, setActiveTab] = useState('dashboard');
-  const [user, setUser] = useState<UserProfile | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [circleSize, setCircleSize] = useState(0);
-  const [journalCount, setJournalCount] = useState(0);
+  const [params] = useSearchParams();
+  const requestedTab = params.get("tab") || "dashboard";
+  const activeTab =
+    location.pathname === "/goals"
+      ? "goals"
+      : internalTabs.includes(requestedTab)
+        ? requestedTab
+        : "dashboard";
   const { user: authUser } = useAuth();
+  const { isAdmin } = useAdmin();
+  const keyboardOpen = useKeyboardOpen();
+  const [user, setUser] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [profileError, setProfileError] = useState(false);
+  const [showSupport, setShowSupport] = useState(false);
+  const [supportType, setSupportType] = useState("");
+  const [supportMessage, setSupportMessage] = useState("");
+  const [sending, setSending] = useState(false);
 
-  // Support system state (global)
-  const [showSupportModal, setShowSupportModal] = useState(false);
-  const [supportType, setSupportType] = useState('');
-  const [supportMessage, setSupportMessage] = useState('');
-
-  const handleTabChange = (tab: string) => {
-    // External pages - navigate to their routes
-    if (tab === 'analytics') {
-      navigate('/analytics');
-   
-    } else if (tab === 'notifications') {
-      navigate('/notifications');
-    } else if (tab === 'achievements') {
-      navigate('/achievements');
-    } else {
-      // Internal tabs - navigate back to home if on external page
-      if (window.location.pathname !== '/') {
-        navigate('/');
-        // Small delay to ensure navigation completes before setting tab
-        setTimeout(() => setActiveTab(tab), 50);
-      } else {
-        setActiveTab(tab);
-      }
-    }
-  };
-
-  useEffect(() => {
-    loadUserProfile();
-    updateCircleActivity();
-    loadCircleSize();
-    loadJournalCount();
-  }, [authUser]);
-
-  // Handle navigation state (e.g., from Circle to Messages)
-  useEffect(() => {
-    if (location.state?.tab) {
-      setActiveTab(location.state.tab);
-    }
-  }, [location]);
-
-  const updateCircleActivity = async () => {
-    if (!authUser) return;
-    try {
-      await supabase.rpc('update_circle_member_activity');
-    } catch (error) {
-      console.error('Error updating activity:', error);
-    }
-  };
-
-  const loadCircleSize = async () => {
-    if (!authUser) return;
-    try {
-      const { count } = await supabase
-        .from('circle_members')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', authUser.id);
-      setCircleSize(count || 0);
-    } catch (error) {
-      console.error('Error loading circle size:', error);
-    }
-  };
-
-  const loadJournalCount = async () => {
-    if (!authUser) return;
-    try {
-      const { count, error } = await supabase
-        .from('journal_entries')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', authUser.id);
-      
-      if (error) throw error;
-      setJournalCount(count || 0);
-    } catch (error) {
-      console.error('Error loading journal count:', error);
-      setJournalCount(0);
-    }
-  };
-
-  const loadUserProfile = async () => {
-    if (!authUser) return;
-
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', authUser.id)
-        .single();
-
-      if (error) throw error;
-
-      if (data) {
-        setUser({
-          id: data.id,
-          name: data.full_name || 'New User',
-          age: data.age || 0,
-          location: data.location || '',
-          city: data.city || '',
-          state: data.state || '',
-          zipcode: data.zipcode || '',
-          sex: data.sex || '',
-          ethnicity: data.ethnicity || '',
-          familyStatus: data.family_status || '',
-          accountabilityAreas: (data.accountability_areas || []) as AccountabilityArea[],
-          avatar: data.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + authUser.id,
-          streakDays: data.streak_days || 0,
-          joinedDate: data.joined_date || new Date().toISOString(),
-          phone_number: data.phone_number || '',
-          phone_verified: data.phone_verified || false
-        });
-      }
-    } catch (error) {
-      console.error('Error loading profile:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleProfileUpdate = (updates: Partial<UserProfile>) => {
-    setUser(prev => prev ? { ...prev, ...updates } : null);
-  };
-
-  const handleSupportSubmit = async () => {
-    if (!authUser || !supportType) {
-      alert('Please select a support type');
+  const handleTabChange = (tab: string, action?: string) => {
+    if (["analytics", "notifications", "achievements", "admin"].includes(tab)) {
+      navigate("/" + tab);
       return;
     }
+    const query = new URLSearchParams();
+    if (tab !== "dashboard") query.set("tab", tab);
+    if (action) query.set("action", action);
+    navigate({ pathname: "/", search: query.toString() }, { state: null });
+    window.scrollTo({ top: 0 });
+  };
 
+  // Retain existing notification links while giving every section browser history.
+  useEffect(() => {
+    if (!location.state?.tab) return;
+    const legacyTab = location.state.tab;
+    const query = new URLSearchParams({
+      tab: legacyTab === "messages" ? "circle" : legacyTab,
+    });
+    if (legacyTab === "messages") query.set("action", "chat");
+    navigate(
+      { pathname: "/", search: query.toString() },
+      { replace: true, state: null },
+    );
+  }, [location.state, navigate]);
+
+  const loadProfile = useCallback(async () => {
+    if (!authUser?.id) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setProfileError(false);
     try {
-      const { error } = await supabase
-        .from('support_requests')
-        .insert({
-          user_id: authUser.id,
-          support_type: supportType,
-          message: supportMessage || null,
-          status: 'active'
-        });
-
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", authUser.id)
+        .single();
       if (error) throw error;
-
-      // Success
-      setShowSupportModal(false);
-      setSupportType('');
-      setSupportMessage('');
-      alert('✅ Support alert sent to your circle! 💪');
+      setUser({
+        id: data.id,
+        name: data.full_name || "Friend",
+        age: data.age || 0,
+        location: data.location || "",
+        city: data.city || "",
+        state: data.state || "",
+        zipcode: data.zipcode || "",
+        sex: data.sex || "",
+        ethnicity: data.ethnicity || "",
+        familyStatus: data.family_status || "",
+        accountabilityAreas: (data.accountability_areas ||
+          []) as AccountabilityArea[],
+        avatar:
+          data.avatar ||
+          "https://api.dicebear.com/7.x/avataaars/svg?seed=" + authUser.id,
+        streakDays: data.streak_days || 0,
+        joinedDate: data.joined_date || new Date().toISOString(),
+        phone_number: data.phone_number || "",
+        phone_verified: data.phone_verified || false,
+      });
     } catch (error) {
-      console.error('Error sending support request:', error);
-      alert('❌ Error sending support request. Please try again.');
+      console.error("Error loading profile:", error);
+      setProfileError(true);
+    } finally {
+      setLoading(false);
+    }
+  }, [authUser?.id]);
+
+  useEffect(() => {
+    loadProfile();
+  }, [loadProfile]);
+  useEffect(() => {
+    if (authUser?.id)
+      supabase.rpc("update_circle_member_activity").then(({ error }) => {
+        if (error) console.error("Error updating Circle activity:", error);
+      });
+  }, [authUser?.id]);
+
+  const sendSupport = async () => {
+    if (!authUser || !supportType || sending) return;
+    setSending(true);
+    try {
+      const { error } = await supabase.from("support_requests").insert({
+        user_id: authUser.id,
+        support_type: supportType,
+        message: supportMessage.trim() || null,
+        status: "active",
+      });
+      if (error) throw error;
+      setShowSupport(false);
+      setSupportType("");
+      setSupportMessage("");
+      toast.success("Your support request is saved in your Circle.");
+    } catch (error) {
+      console.error("Error saving support request:", error);
+      toast.error("Your request could not be saved. Please try again.");
+    } finally {
+      setSending(false);
     }
   };
 
-  if (isLoading || !user) {
+  if (profileError || (!loading && !user))
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <p className="text-gray-500">Loading...</p>
+      <div
+        role="alert"
+        className="min-h-screen flex flex-col items-center justify-center gap-4 p-6"
+      >
+        <p>We could not load your profile.</p>
+        <button
+          onClick={loadProfile}
+          className="bg-[#1a2332] text-white rounded-lg px-5 py-3"
+        >
+          Try again
+        </button>
       </div>
     );
-  }
+  if (loading || !user)
+    return (
+      <div
+        role="status"
+        className="min-h-screen flex items-center justify-center"
+      >
+        Loading your account…
+      </div>
+    );
 
   const renderContent = () => {
-    // If children are provided, render them instead of internal routing
-    if (children) {
-      return children;
-    }
-
-    // Otherwise use internal routing
+    if (children) return children;
     switch (activeTab) {
-      case 'dashboard':
-        return <DashboardSection onTabChange={handleTabChange} />;
-      case 'journal':
-        return <JournalSection />;
-      case 'circle':
-        return <CircleSection />;
-      case 'workshop':
+      case "journal":
+        return (
+          <JournalSection
+            key={params.get("action") || "list"}
+            openNew={params.get("action") === "new"}
+          />
+        );
+      case "circle":
+        return (
+          <CircleSection
+            key={params.get("action") || "members"}
+            initialView={params.get("action") === "chat" ? "chat" : "members"}
+          />
+        );
+      case "workshop":
         return <WorkshopViewer />;
-      case 'goals':
-        return <GoalTracker />;
-      case 'profile':
-        return <ProfileSection user={user} onUpdate={handleProfileUpdate} />;
-      case 'admin':
-        return <AdminSection />;
+      case "goals":
+        return (
+          <GoalTracker
+            key={params.get("action") || "list"}
+            openNew={params.get("action") === "new"}
+          />
+        );
+      case "profile":
+        return <ProfileSection />;
       default:
         return <DashboardSection onTabChange={handleTabChange} />;
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-24">
-      {/* Header with Logo */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-          <img 
-            src="https://d64gsuwffb70l.cloudfront.net/6906b08a650ee0590aaf4bb4_1762183406403_6827ce42.png" 
-            alt="Accountable" 
-            className="h-16 w-auto"
-          />
-        <div className="flex items-center gap-4">
-  <NotificationBell />  {/* ✅ ADD THIS LINE */}
-  {user && (
-    <button
-      onClick={() => handleTabChange('profile')}
-      className="flex items-center gap-2 hover:bg-gray-100 rounded-lg px-3 py-2 transition-colors"
+    <div
+      className={`min-h-screen bg-gray-50 pb-24 ${keyboardOpen ? "keyboard-open" : ""}`}
     >
-      <img 
-        src={user.avatar} 
-        alt={user.name} 
-        className="h-10 w-10 rounded-full border-2 border-gray-200"
-      />
-      <span className="text-sm font-medium text-gray-700 hidden sm:block">
-        {user.name}
-      </span>
-    </button>
-  )}
-</div>
+      <header className="app-header sticky top-0 z-40 bg-white border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-3 sm:px-4 py-2 flex justify-between items-center gap-2">
+          <button
+            aria-label="Go to Home"
+            onClick={() => handleTabChange("dashboard")}
+            className="shrink-0"
+          >
+            <img
+              src="https://d64gsuwffb70l.cloudfront.net/6906b08a650ee0590aaf4bb4_1762183406403_6827ce42.png"
+              alt="Accountable"
+              className="app-logo"
+            />
+          </button>
+          <div className="flex items-center gap-1 sm:gap-3">
+            <button
+              aria-label="Request Circle support"
+              onClick={() => setShowSupport(true)}
+              className="flex items-center gap-1 px-2 py-2 rounded-lg hover:bg-gray-100 text-[#1a2332]"
+            >
+              <LifeBuoy className="w-5 h-5" aria-hidden="true" />
+              <span className="hidden sm:inline text-sm">Support</span>
+            </button>
+            {isAdmin && (
+              <button
+                aria-label="Administration"
+                onClick={() => navigate("/admin")}
+                className="px-2 py-2 rounded-lg hover:bg-gray-100"
+              >
+                <ShieldCheck className="w-5 h-5" aria-hidden="true" />
+              </button>
+            )}
+            <NotificationBell />
+            <button
+              aria-label="Profile and settings"
+              onClick={() => handleTabChange("profile")}
+              className="flex items-center gap-2 p-1 rounded-full hover:bg-gray-100"
+            >
+              <img
+                src={user.avatar}
+                alt=""
+                className="app-avatar rounded-full"
+              />
+              <span className="hidden sm:inline text-sm">{user.name}</span>
+            </button>
+          </div>
         </div>
       </header>
-
-      <div className="max-w-7xl mx-auto px-4 py-8">
+      <main className="app-content max-w-7xl mx-auto px-4 py-4 sm:py-6">
         <NotificationPermissionBanner />
         {authUser && !authUser.email_confirmed_at && authUser.email && (
           <EmailVerificationBanner email={authUser.email} />
         )}
         {renderContent()}
-      </div>
-
+      </main>
       <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
-
-      {/* Global Support Button - Fixed Position (Shows on ALL pages) */}
-      <button
-        onClick={() => setShowSupportModal(true)}
-        className="fixed bottom-24 right-6 bg-red-600 text-white p-4 rounded-full shadow-lg hover:bg-red-700 transition-all hover:scale-110 z-40 flex items-center gap-2"
+      <Dialog
+        open={showSupport}
+        onOpenChange={(open) => {
+          if (!sending) setShowSupport(open);
+        }}
       >
-        <LifeBuoy className="w-6 h-6" />
-        <span className="hidden sm:inline font-medium">Need Support?</span>
-      </button>
-
-      {/* Global Support Modal */}
-      {showSupportModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-lg w-full p-6">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="bg-red-600 rounded-full p-3">
-                <LifeBuoy className="w-8 h-8 text-white" />
-              </div>
-              <div>
-                <h3 className="text-2xl font-bold text-gray-900">Need Accountability Support?</h3>
-                <p className="text-gray-600">Your circle is here for you</p>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  What do you need help with?
-                </label>
-                <select
-                  value={supportType}
-                  onChange={(e) => setSupportType(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
-                >
-                  <option value="">Select a category...</option>
-                  <option value="goals">Struggling with goals</option>
-                  <option value="motivation">Need motivation</option>
-                  <option value="setback">Facing a setback</option>
-                  <option value="emotional">Emotional support</option>
-                  <option value="encouragement">Need encouragement</option>
-                  <option value="other">Other</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Message (Optional)
-                </label>
-                <textarea
-                  value={supportMessage}
-                  onChange={(e) => setSupportMessage(e.target.value)}
-                  placeholder="Share what's on your mind..."
-                  rows={4}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
-                />
-              </div>
-
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                <p className="text-sm text-blue-800">
-                  💡 Your circle members will be notified and can offer support and encouragement.
-                </p>
-              </div>
-
-              <div className="flex gap-3">
-                <button
-                  onClick={() => {
-                    setShowSupportModal(false);
-                    setSupportType('');
-                    setSupportMessage('');
-                  }}
-                  className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSupportSubmit}
-                  disabled={!supportType}
-                  className="flex-1 px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Send Alert to Circle
-                </button>
-              </div>
-            </div>
+        <DialogContent className="app-dialog">
+          <DialogHeader>
+            <DialogTitle>Request Circle support</DialogTitle>
+            <DialogDescription>
+              Your request will appear in your Circle’s Support section.
+              Responses may not be immediate.
+            </DialogDescription>
+          </DialogHeader>
+          <label htmlFor="support-type" className="text-sm font-medium">
+            What do you need help with?
+          </label>
+          <select
+            id="support-type"
+            value={supportType}
+            onChange={(event) => setSupportType(event.target.value)}
+            className="w-full border rounded-lg p-3"
+          >
+            <option value="">Choose a category</option>
+            <option value="goals">Staying on track with goals</option>
+            <option value="motivation">Motivation</option>
+            <option value="setback">A setback</option>
+            <option value="emotional">Emotional support</option>
+            <option value="encouragement">Encouragement</option>
+            <option value="other">Other</option>
+          </select>
+          <label htmlFor="support-message" className="text-sm font-medium">
+            Message optional
+          </label>
+          <textarea
+            id="support-message"
+            rows={3}
+            value={supportMessage}
+            onChange={(event) => setSupportMessage(event.target.value)}
+            className="w-full border rounded-lg p-3"
+            placeholder="What would you like your Circle to know?"
+          />
+          <div className="flex gap-3">
+            <button
+              disabled={sending}
+              onClick={() => setShowSupport(false)}
+              className="flex-1 border rounded-lg p-3"
+            >
+              Cancel
+            </button>
+            <button
+              disabled={!supportType || sending}
+              onClick={sendSupport}
+              className="flex-1 rounded-lg p-3 bg-[#1a2332] text-white disabled:opacity-50"
+            >
+              {sending ? "Saving…" : "Share with Circle"}
+            </button>
           </div>
-        </div>
-      )}
-
-      {/* PWA Install Prompt */}
+        </DialogContent>
+      </Dialog>
       <PWAInstallPrompt />
     </div>
   );
-};
-
-export default AppLayout;
-
+}
