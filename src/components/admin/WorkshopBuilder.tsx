@@ -9,18 +9,20 @@ import { WorkshopPreview } from './WorkshopPreview';
 
 interface WorkshopBuilderProps {
   workshopId?: string;
+  workshop?: Record<string, unknown>;
   onBack: () => void;
   onSave: (data: any) => Promise<void>;
 }
 
-export function WorkshopBuilder({ workshopId, onBack, onSave }: WorkshopBuilderProps) {
+export function WorkshopBuilder({ workshopId, workshop, onBack, onSave }: WorkshopBuilderProps) {
   const [activeTab, setActiveTab] = useState('overview');
   const [workshopData, setWorkshopData] = useState<any>({
     title: '',
     description: '',
     status: 'draft',
     difficulty_level: 'beginner',
-    modules: []
+    modules: [],
+    ...workshop
   });
   const [saving, setSaving] = useState(false);
 

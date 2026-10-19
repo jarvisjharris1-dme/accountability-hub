@@ -433,7 +433,7 @@ export default function AdminDashboard() {
                 </div>
               </CardHeader>
               <CardContent>
-                <WorkshopBuilder workshop={selectedWorkshop} onSave={handleSaveWorkshop} />
+                <WorkshopBuilder key={selectedWorkshop?.id || 'new'} workshop={selectedWorkshop} onBack={() => { setWorkshopBuilderOpen(false); setSelectedWorkshop(null); }} onSave={handleSaveWorkshop} />
               </CardContent>
             </Card>
           ) : (

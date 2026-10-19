@@ -138,6 +138,8 @@ export function ConversationList({ onSelectConversation, selectedId }: Conversat
 
       {showCreateGroup && (
         <CreateGroupDialog
+          isOpen={showCreateGroup}
+          selectedMembers={[]}
           onClose={() => setShowCreateGroup(false)}
           onCreated={() => {
             setShowCreateGroup(false);

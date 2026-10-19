@@ -35,7 +35,7 @@ Support copy now describes the confirmed behavior: requests appear in the Circle
 - Clean dependency installation completed with the committed lockfile.
 - Production build passed.
 - Eleven focused automated component tests passed (`npm test`). These use mocked data and do not replace real-device testing.
-- Full TypeScript checking remains blocked by existing errors in messaging, notification settings, an admin table, the admin workshop editor, and shared hooks/types. No diagnostics remained in the changed application files at the last check.
+- Full application and Vite configuration TypeScript checks now pass (`npm run typecheck`). Component props/callbacks, notification defaults, and shared query/environment types were corrected in the release follow-up.
 - Browser access to the local preview was unavailable. The supplied images establish the current iPhone problems; they do not verify the revised layout.
 
 ## Release checks still needed
@@ -46,4 +46,4 @@ Support copy now describes the confirmed behavior: requests appear in the Circle
 4. Repeat a small reflection/goal/message test after deployment; confirm visibility and clean up only the marked fixtures.
 5. Run the optional placeholder cleanup only as part of the agreed production release, after reviewing the exact target row. Retain the row and its user progress.
 
-The code is saved on the local branch `codex/accountable-mobile-usability`. Creating the remote branch was blocked by GitHub with HTTP 403, “Resource not accessible by integration.” No pull request was created. The downloadable handoff contains an apply-ready Git patch. Production merge/deployment and the optional workshop cleanup have not been performed.
+GitHub write access was restored. The source and validation follow-up are tracked in pull request #2: https://github.com/jarvisjharris1-dme/accountability-hub/pull/2. The original downloadable patch is a pre-release snapshot; the pull request is the current source. The optional placeholder cleanup is separate from the frontend build and has not been executed.

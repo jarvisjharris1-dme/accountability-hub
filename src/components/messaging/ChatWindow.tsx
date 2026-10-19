@@ -21,6 +21,8 @@ interface ChatWindowProps {
   groupId?: string;
   highlightMessageId?: string;
   searchQuery?: string;
+  searchStartDate?: Date;
+  searchEndDate?: Date;
 }
 
 interface MessageInsert {
@@ -39,7 +41,9 @@ export function ChatWindow({
   recipientAvatar, 
   groupId, 
   highlightMessageId, 
-  searchQuery 
+  searchQuery,
+  searchStartDate,
+  searchEndDate
 }: ChatWindowProps) {
   const { user } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -194,11 +198,14 @@ export function ChatWindow({
   }, [highlightMessageId, messages, scrollToMessage]);
 
   // Filter messages by search query
-  const filteredMessages = searchQuery
-    ? messages.filter(msg => 
-        msg.content.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : messages;
+  const filteredMessages = messages.filter(message => {
+    const created = new Date(message.created_at);
+    const end = searchEndDate ? new Date(searchEndDate) : undefined;
+    end?.setHours(23, 59, 59, 999);
+    return (!searchQuery || (message.content || '').toLowerCase().includes(searchQuery.toLowerCase()))
+      && (!searchStartDate || created >= searchStartDate)
+      && (!end || created <= end);
+  });
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -372,9 +379,10 @@ export function ChatWindow({
         <GroupChatHeader
           group={group}
           members={members}
-          onSettingsClick={() => setShowSettings(true)}
-          onMediaClick={() => setShowMediaGallery(true)}
-          onCallClick={startVoiceCall}
+          isTyping={false}
+          onSettings={() => setShowSettings(true)}
+          onMediaGallery={() => setShowMediaGallery(true)}
+          onCall={startVoiceCall}
         />
       ) : (
         <div className="flex items-center justify-between p-4 border-b">
@@ -399,8 +407,9 @@ export function ChatWindow({
       {/* Pinned Messages */}
       {pinnedMessages.length > 0 && (
         <PinnedMessagesSection 
-          messages={pinnedMessages} 
-          onMessageClick={scrollToMessage}
+          pinnedMessages={pinnedMessages}
+          onUnpin={handleUnpinMessage}
+          onNavigate={scrollToMessage}
         />
       )}
 
@@ -440,12 +449,12 @@ export function ChatWindow({
 
       {/* Mention Autocomplete */}
       {showMentions && (
-        <MentionAutocomplete
+        <div className="relative"><MentionAutocomplete
           members={members}
           query={mentionQuery}
-          onSelect={handleMentionSelect}
-          onClose={() => setShowMentions(false)}
-        />
+          onSelect={(_userId, userName) => handleMentionSelect(userName)}
+          position={{ top: 0, left: 0 }}
+        /></div>
       )}
 
       {/* Input */}
@@ -453,7 +462,7 @@ export function ChatWindow({
         <div className="flex items-center gap-2">
           {isRecording ? (
             <VoiceRecorder 
-              onComplete={handleVoiceRecording}
+              onSend={handleVoiceRecording}
               onCancel={() => setIsRecording(false)}
             />
           ) : (
@@ -485,18 +494,17 @@ export function ChatWindow({
       {showSettings && group && (
         <GroupSettingsDialog
           group={group}
-          members={members}
-          open={showSettings}
-          onOpenChange={setShowSettings}
+          isOpen={showSettings}
+          onClose={() => setShowSettings(false)}
           onUpdate={loadGroupData}
         />
       )}
 
-      {showMediaGallery && (
+      {showMediaGallery && groupId && (
         <MediaGallery
-          messages={messages}
-          open={showMediaGallery}
-          onOpenChange={setShowMediaGallery}
+          groupId={groupId}
+          isOpen={showMediaGallery}
+          onClose={() => setShowMediaGallery(false)}
         />
       )}
     </div>

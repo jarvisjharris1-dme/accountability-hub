@@ -42,6 +42,8 @@ export default function NotificationSettings() {
     if (data) {
       setPreferences({
         new_messages: data.new_messages,
+        mentions: data.mentions ?? true,
+        group_activity: data.group_activity ?? true,
         circle_invitations: data.circle_invitations,
         emergency_alerts: data.emergency_alerts,
         journal_reminders: data.journal_reminders,
