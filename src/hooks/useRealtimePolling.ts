@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import type { PostgrestFilterBuilder } from '@supabase/postgrest-js';
 
 interface UseRealtimePollingOptions {
   table: string;
@@ -13,7 +12,7 @@ interface UseRealtimePollingOptions {
  * Tries realtime first, falls back to polling if realtime fails
  */
 export function useRealtimePolling<T>(
-  queryBuilder: () => PostgrestFilterBuilder<any, any, T[]>,
+  queryBuilder: () => PromiseLike<{ data: T[] | null; error: unknown }>,
   options: UseRealtimePollingOptions
 ) {
   const [data, setData] = useState<T[]>([]);

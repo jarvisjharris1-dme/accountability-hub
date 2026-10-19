@@ -12,6 +12,8 @@ export function MessagingSection() {
     isGroup: boolean;
   } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchStartDate, setSearchStartDate] = useState<Date>();
+  const [searchEndDate, setSearchEndDate] = useState<Date>();
   const [highlightMessageId, setHighlightMessageId] = useState<string>();
 
   // Check for auto-select member on mount
@@ -61,6 +63,8 @@ export function MessagingSection() {
   const handleSelectConversation = (id: string, name: string, avatar?: string, isGroup = false) => {
     setSelectedConversation({ id, name, avatar, isGroup });
     setSearchQuery('');
+    setSearchStartDate(undefined);
+    setSearchEndDate(undefined);
     setHighlightMessageId(undefined);
   };
 
@@ -78,8 +82,16 @@ export function MessagingSection() {
     <div className="bg-white rounded-lg shadow-sm h-[600px] flex">
       <div className="w-80 border-r flex flex-col">
         <MessageSearchBar 
-          onSearchResult={handleSearchResult}
-          currentUserId={selectedConversation?.id}
+          onSearch={(query, startDate, endDate) => {
+            setSearchQuery(query);
+            setSearchStartDate(startDate);
+            setSearchEndDate(endDate);
+          }}
+          onClear={() => {
+            setSearchQuery('');
+            setSearchStartDate(undefined);
+            setSearchEndDate(undefined);
+          }}
         />
         <ConversationList 
           onSelectConversation={handleSelectConversation}
@@ -96,6 +108,8 @@ export function MessagingSection() {
             groupId={selectedConversation.isGroup ? selectedConversation.id : undefined}
             highlightMessageId={highlightMessageId}
             searchQuery={searchQuery}
+            searchStartDate={searchStartDate}
+            searchEndDate={searchEndDate}
           />
         ) : (
           <div className="h-full flex items-center justify-center text-gray-500">

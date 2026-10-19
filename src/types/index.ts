@@ -63,7 +63,6 @@ export interface CheckInAlert {
   currentIndex: number;
   active: boolean;
 }
-}
 
 
 export interface MessageReaction {

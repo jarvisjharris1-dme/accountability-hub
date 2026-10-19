@@ -34,7 +34,7 @@ export function InitialGoalStep({ onComplete, onSkip }: InitialGoalStepProps) {
           <Label htmlFor="title">Goal Title *</Label>
           <Input
             id="title"
-            placeholder="e.g., Run a 5K marathon"
+            placeholder="e.g., Walk for ten minutes each morning"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
           />
@@ -48,9 +48,9 @@ export function InitialGoalStep({ onComplete, onSkip }: InitialGoalStepProps) {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="health">Health & Fitness</SelectItem>
-              <SelectItem value="career">Career</SelectItem>
-              <SelectItem value="education">Education</SelectItem>
-              <SelectItem value="finance">Finance</SelectItem>
+              <SelectItem value="professional">Career</SelectItem>
+              <SelectItem value="other">Education</SelectItem>
+              <SelectItem value="financial">Finance</SelectItem>
               <SelectItem value="personal">Personal Growth</SelectItem>
             </SelectContent>
           </Select>
@@ -80,7 +80,7 @@ export function InitialGoalStep({ onComplete, onSkip }: InitialGoalStepProps) {
       </div>
 
       <div className="space-y-3">
-        <Button 
+        <Button
           onClick={handleSubmit}
           className="w-full bg-[#d4a574] hover:bg-[#c49564]"
           disabled={!title || !category || !targetDate}

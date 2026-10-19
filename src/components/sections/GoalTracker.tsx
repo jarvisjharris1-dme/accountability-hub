@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { 
+import {
   Target,
   Plus,
   Edit,
@@ -51,15 +52,18 @@ const CATEGORIES = [
   { id: 'other', name: 'Other', color: 'gray' }
 ];
 
-export function GoalTracker() {
+export function GoalTracker({ openNew = false }: { openNew?: boolean }) {
   const { user } = useAuth();
   const [goals, setGoals] = useState<Goal[]>([]);
   const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null);
   const [milestones, setMilestones] = useState<Milestone[]>([]);
-  const [showAddGoal, setShowAddGoal] = useState(false);
+  const [showAddGoal, setShowAddGoal] = useState(openNew);
+  const [saving, setSaving] = useState(false);
+  const formRef = useRef<HTMLDivElement>(null);
   const [showAddMilestone, setShowAddMilestone] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string>('active');
   const [loading, setLoading] = useState(true);
+  useEffect(() => { if (showAddGoal && !loading) formRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, [showAddGoal, loading]);
 
   const [goalForm, setGoalForm] = useState({
     title: '',
@@ -78,7 +82,7 @@ export function GoalTracker() {
 
   useEffect(() => {
     loadGoals();
-  }, [user, filterStatus]);
+  }, [user?.id]);
 
   useEffect(() => {
     if (selectedGoal) {
@@ -96,9 +100,6 @@ export function GoalTracker() {
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
-      if (filterStatus !== 'all') {
-        query = query.eq('status', filterStatus);
-      }
 
       const { data, error } = await query;
       if (error) throw error;
@@ -126,11 +127,13 @@ export function GoalTracker() {
   };
 
   const handleSaveGoal = async () => {
+    if (saving) return;
     if (!user?.id || !goalForm.title.trim()) {
       alert('Please enter a goal title');
       return;
     }
 
+    setSaving(true);
     try {
       const { error } = await supabase
         .from('goals')
@@ -148,7 +151,7 @@ export function GoalTracker() {
 
       if (error) throw error;
 
-      alert('Goal created successfully!');
+      toast.success('Your goal is saved.');
       setGoalForm({
         title: '',
         description: '',
@@ -161,14 +164,16 @@ export function GoalTracker() {
       loadGoals();
     } catch (error: any) {
       console.error('Error saving goal:', error);
-      alert('Error saving goal: ' + error.message);
+      toast.error('Your goal could not be saved. Please try again.');
+    } finally {
+      setSaving(false);
     }
   };
 
   const handleUpdateGoalProgress = async (goalId: string, newProgress: number) => {
     try {
       const updates: any = { progress_percentage: newProgress };
-      
+
       if (newProgress === 100) {
         updates.status = 'completed';
         updates.completed_at = new Date().toISOString();
@@ -181,7 +186,7 @@ export function GoalTracker() {
 
       if (error) throw error;
       loadGoals();
-      
+
       if (newProgress === 100) {
         alert('🎉 Goal completed! Congratulations!');
       }
@@ -244,10 +249,10 @@ export function GoalTracker() {
 
   const handleToggleMilestone = async (milestoneId: string, completed: boolean) => {
     try {
-      const updates: any = { 
-        completed: !completed 
+      const updates: any = {
+        completed: !completed
       };
-      
+
       if (!completed) {
         updates.completed_at = new Date().toISOString();
       } else {
@@ -260,15 +265,15 @@ export function GoalTracker() {
         .eq('id', milestoneId);
 
       if (error) throw error;
-      
+
       if (selectedGoal) {
         loadMilestones(selectedGoal.id);
-        
+
         // Update goal progress based on completed milestones
         const completedCount = milestones.filter(m => m.id === milestoneId ? !completed : m.completed).length;
         const totalCount = milestones.length;
         const newProgress = Math.round((completedCount / totalCount) * 100);
-        
+
         handleUpdateGoalProgress(selectedGoal.id, newProgress);
       }
     } catch (error: any) {
@@ -292,9 +297,11 @@ export function GoalTracker() {
 
   const activeGoals = goals.filter(g => g.status === 'active').length;
   const completedGoals = goals.filter(g => g.status === 'completed').length;
-  const totalProgress = goals.length > 0 
+  const totalProgress = goals.length > 0
     ? Math.round(goals.reduce((sum, g) => sum + g.progress_percentage, 0) / goals.length)
     : 0;
+
+  const visibleGoals = filterStatus === 'all' ? goals : goals.filter(goal => goal.status === filterStatus);
 
   if (loading) {
     return (
@@ -316,40 +323,40 @@ export function GoalTracker() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white rounded-lg shadow p-6">
+      <div className="grid grid-cols-3 gap-2 sm:gap-6">
+        <div className="bg-white rounded-lg shadow p-3 sm:p-6">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600 mb-1">Active Goals</p>
-              <p className="text-3xl font-bold text-[#1a2332]">{activeGoals}</p>
+              <p className="text-2xl sm:text-3xl font-bold text-[#1a2332]">{activeGoals}</p>
             </div>
-            <Target className="w-12 h-12 text-blue-500" />
+            <Target className="hidden md:block w-12 h-12 text-blue-500" />
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-white rounded-lg shadow p-3 sm:p-6">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600 mb-1">Completed</p>
-              <p className="text-3xl font-bold text-[#1a2332]">{completedGoals}</p>
+              <p className="text-2xl sm:text-3xl font-bold text-[#1a2332]">{completedGoals}</p>
             </div>
-            <Check className="w-12 h-12 text-green-500" />
+            <Check className="hidden md:block w-12 h-12 text-green-500" />
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-white rounded-lg shadow p-3 sm:p-6">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600 mb-1">Avg Progress</p>
-              <p className="text-3xl font-bold text-[#1a2332]">{totalProgress}%</p>
+              <p className="text-2xl sm:text-3xl font-bold text-[#1a2332]">{totalProgress}%</p>
             </div>
-            <TrendingUp className="w-12 h-12 text-purple-500" />
+            <TrendingUp className="hidden md:block w-12 h-12 text-purple-500" />
           </div>
         </div>
       </div>
 
       {/* Filters and Add Button */}
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center gap-3 flex-wrap">
         <div className="flex gap-2">
           <button
             onClick={() => setFilterStatus('active')}
@@ -394,7 +401,7 @@ export function GoalTracker() {
 
       {/* Add Goal Form */}
       {showAddGoal && (
-        <div className="bg-white rounded-lg shadow p-6">
+        <div ref={formRef} className="scroll-mt-28 bg-white rounded-lg shadow p-4 sm:p-6">
           <h3 className="text-xl font-semibold mb-4">Create New Goal</h3>
           <div className="space-y-4">
             <div>
@@ -473,9 +480,10 @@ export function GoalTracker() {
             <div className="flex gap-2">
               <button
                 onClick={handleSaveGoal}
+                disabled={saving || !goalForm.title.trim()}
                 className="bg-[#1a2332] text-white px-4 py-2 rounded-lg hover:bg-[#2d3e50]"
               >
-                Create Goal
+                {saving ? 'Saving…' : 'Create Goal'}
               </button>
               <button
                 onClick={() => {
@@ -499,7 +507,7 @@ export function GoalTracker() {
       )}
 
       {/* Goals List */}
-      {goals.length === 0 ? (
+      {visibleGoals.length === 0 ? (
         <div className="bg-white rounded-lg shadow p-12 text-center">
           <Target className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <h3 className="text-xl font-semibold text-gray-700 mb-2">No Goals Yet</h3>
@@ -513,7 +521,7 @@ export function GoalTracker() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {goals.map((goal) => (
+          {visibleGoals.map((goal) => (
             <div
               key={goal.id}
               className="bg-white rounded-lg shadow hover:shadow-lg transition-shadow overflow-hidden"
@@ -529,7 +537,7 @@ export function GoalTracker() {
                         {goal.priority}
                       </span>
                       {goal.is_public && (
-                        <Users className="w-4 h-4 text-gray-400" title="Shared with circle" />
+                        <Users className="w-4 h-4 text-gray-400" aria-label="Shared with circle" />
                       )}
                     </div>
                     <h3 className="text-xl font-semibold text-[#1a2332] mb-2">
@@ -548,7 +556,8 @@ export function GoalTracker() {
                     )}
                   </div>
                   <button
-                    onClick={() => handleDeleteGoal(goal.id)}
+                    aria-label={`Delete goal ${goal.title}`}
+                      onClick={() => handleDeleteGoal(goal.id)}
                     className="text-gray-400 hover:text-red-600"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -638,7 +647,9 @@ export function GoalTracker() {
                           className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded"
                         >
                           <button
-                            onClick={() => handleToggleMilestone(milestone.id, milestone.completed)}
+                            aria-label={`${milestone.completed ? 'Reopen' : 'Complete'} milestone ${milestone.title}`}
+                              aria-pressed={milestone.completed}
+                              onClick={() => handleToggleMilestone(milestone.id, milestone.completed)}
                             className={`flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center ${
                               milestone.completed
                                 ? 'bg-green-600 border-green-600'

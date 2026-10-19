@@ -64,7 +64,7 @@ export function PWAInstallPrompt() {
   }
 
   return (
-    <div className="fixed bottom-20 left-4 right-4 z-50 md:left-auto md:right-4 md:w-96">
+    <div className="app-install-prompt fixed bottom-20 left-4 right-4 z-50 md:left-auto md:right-4 md:w-96">
       <div className="bg-white rounded-xl shadow-2xl border-2 border-[#1a2332] p-4">
         <button
           onClick={handleDismiss}

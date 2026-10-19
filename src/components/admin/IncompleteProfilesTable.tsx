@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import type { User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -33,10 +34,10 @@ export function IncompleteProfilesTable() {
 
       if (profileError) throw profileError;
 
-      const profileIds = new Set(profiles?.map(p => p.id) || []);
+      const profileIds = new Set(((profiles || []) as { id: string }[]).map(p => p.id));
       
       const incomplete = authUsers
-        .filter(u => !profileIds.has(u.id))
+        .filter((u: User) => !profileIds.has(u.id))
         .map(u => ({
           id: u.id,
           email: u.email || 'No email',

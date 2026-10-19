@@ -37,13 +37,6 @@ a,
   -webkit-touch-callout: none;
 }
 
-/* Safe area padding for header */
-header {
-  padding-top: calc(1rem + var(--safe-area-top));
-  padding-left: calc(1rem + var(--safe-area-left));
-  padding-right: calc(1rem + var(--safe-area-right));
-}
-
 /* Safe area padding for bottom navigation */
 .safe-area-bottom {
   padding-bottom: var(--safe-area-bottom);
@@ -59,7 +52,7 @@ body {
   ::-webkit-scrollbar {
     display: none;
   }
-  
+
   * {
     -ms-overflow-style: none;
     scrollbar-width: none;
@@ -71,15 +64,6 @@ nav.fixed.bottom-0 {
   bottom: 0;
   padding-left: var(--safe-area-left);
   padding-right: var(--safe-area-right);
-}
-
-/* Anchor to the dynamic viewport rather than iOS's fixed-bottom inset. */
-@supports (height: 100dvh) {
-  nav.fixed.bottom-0 {
-    top: 100dvh;
-    bottom: auto;
-    transform: translateY(-100%);
-  }
 }
 
 /* Keep the last page content above the navigation and home indicator. */
@@ -148,7 +132,7 @@ body {
     padding-top: 0.5rem;
     padding-bottom: 0.5rem;
   }
-  
+
   header img {
     height: 3rem;
   }
@@ -261,4 +245,50 @@ select:focus {
 .accelerated {
   transform: translateZ(0);
   will-change: transform;
+}
+
+/* Compact application chrome without applying padding to every page header. */
+.app-header {
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+.app-logo { height: 2rem; width: auto; max-width: 6rem; object-fit: contain; }
+.app-avatar { height: 2rem; width: 2rem; object-fit: cover; }
+.app-bottom-nav { top: auto; bottom: 0; transform: none; }
+.app-content { scroll-padding-top: calc(4rem + env(safe-area-inset-top, 0px)); }
+.app-dialog {
+  max-height: calc(var(--app-visual-height, 100dvh) - 2rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+[role="dialog"].app-dialog {
+  top: var(--app-dialog-center, 50%);
+  width: calc(100% - 2rem);
+}
+@media (max-width: 767px) {
+  .app-keyboard-open .app-header,
+  .app-keyboard-open .app-bottom-nav,
+  .app-keyboard-open .app-install-prompt { display: none; }
+  .app-keyboard-open .app-content { padding-top: env(safe-area-inset-top, 0px); }
+  .app-keyboard-open .entry-form { scroll-margin-top: calc(env(safe-area-inset-top, 0px) + 1rem); }
+  .app-keyboard-open .modal-overlay {
+    top: var(--app-visual-top, 0px);
+    bottom: auto;
+    height: var(--app-visual-height, 100dvh);
+  }
+  .app-keyboard-open body::before {
+    content: '';
+    position: fixed;
+    inset: 0 0 auto;
+    height: env(safe-area-inset-top, 0px);
+    background: white;
+    pointer-events: none;
+    z-index: 50;
+  }
+  .app-content h1 { font-size: 1.5rem; line-height: 1.25; }
+}
+@media (min-width: 640px) {
+  .app-logo { height: 3rem; max-width: 10rem; }
+  .app-avatar { height: 2.5rem; width: 2.5rem; }
 }
